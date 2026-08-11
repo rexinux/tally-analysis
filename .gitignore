@@ -1,0 +1,18 @@
+# Private financial data files (Tally XMLs and GSTR-2B Excel/JSON)
+*.xml
+*.zip
+R2B/*.xlsx
+R2B/*.json
+R2B/*.csv
+
+# Preserve directory structure
+!R2B/.gitkeep
+
+# Python bytecode & temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+.DS_Store
+.vscode/
+.idea/

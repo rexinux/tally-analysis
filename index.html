@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rexinux's Tally Analyser - Intelligent Financial Viewer & GSTR-2B Reco</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .badge-vtype-journal { background-color: #334155; color: #cbd5e1; }
+    .badge-vtype-purchase { background-color: #7c2d12; color: #ffedd5; }
+    .badge-vtype-payment { background-color: #581c87; color: #f3e8ff; }
+    .badge-vtype-sales { background-color: #1e3a8a; color: #dbeafe; }
+    .badge-vtype-receipt { background-color: #14532d; color: #dcfce7; }
+    .badge-vtype-contra { background-color: #155e75; color: #cffafe; }
+    .badge-vtype-debitnote { background-color: #831843; color: #fce7f3; }
+    .badge-vtype-creditnote { background-color: #701a75; color: #fae8ff; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- TOP HEADER NAVBAR -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-30 shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        
+        <!-- Left: Logo & Company Name -->
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 bg-gradient-to-r from-sky-500 to-indigo-600 p-2 rounded-xl text-white shadow-md shadow-sky-500/20">
+            <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-lg font-bold text-white tracking-tight">Rexinux's Tally Analyser</h1>
+              <span id="header-file-name" class="text-xs bg-slate-800 text-sky-400 font-mono px-2.5 py-0.5 rounded-full border border-slate-700">Loading...</span>
+            </div>
+            <p id="header-company-name" class="text-xs text-slate-400 font-medium truncate max-w-md">Initializing database...</p>
+          </div>
+        </div>
+
+        <!-- Middle: Quick Stats Badges -->
+        <div class="hidden md:flex items-center gap-3">
+          <div class="bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 flex items-center gap-2">
+            <i data-lucide="calendar" class="w-4 h-4 text-sky-400"></i>
+            <span id="header-date-range" class="text-xs text-slate-300 font-mono">FY 2025-2026</span>
+          </div>
+          <div class="bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
+            <span id="header-voucher-count" class="text-xs text-slate-300 font-mono">0 Vouchers</span>
+          </div>
+        </div>
+
+        <!-- Right Actions: Export Tally XML & Upload File -->
+        <div class="flex items-center gap-2.5">
+          <button onclick="exportTallyXML()" title="Export modified data as importable Tally XML" class="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>Export Tally XML</span>
+          </button>
+          
+          <button onclick="openUploadModal()" class="flex items-center gap-1.5 px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">
+            <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+            <span>Load New File</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- NAVIGATION TABS -->
+      <nav class="flex space-x-1 border-t border-slate-800/60 pt-1 overflow-x-auto">
+        <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn active px-4 py-2 text-xs font-medium text-sky-400 border-b-2 border-sky-500 flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          Dashboard
+        </button>
+        <button onclick="switchTab('daybook')" id="tab-btn-daybook" class="tab-btn px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="book-open" class="w-4 h-4"></i>
+          Daybook (Vouchers)
+        </button>
+        <button onclick="switchTab('gstr2b')" id="tab-btn-gstr2b" class="tab-btn px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+          GSTR-2B Reco
+        </button>
+        <button onclick="switchTab('trial-balance')" id="tab-btn-trial-balance" class="tab-btn px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="scale" class="w-4 h-4"></i>
+          Trial Balance
+        </button>
+        <button onclick="switchTab('pl-statement')" id="tab-btn-pl-statement" class="tab-btn px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="trending-up" class="w-4 h-4"></i>
+          Profit & Loss
+        </button>
+        <button onclick="switchTab('ledger-statement')" id="tab-btn-ledger-statement" class="tab-btn px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          Ledger Statement
+        </button>
+      </nav>
+    </div>
+  </header>
+
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- 1. DASHBOARD VIEW -->
+    <section id="view-dashboard" class="tab-view space-y-6">
+      
+      <!-- Top Stat Cards Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Transactions</p>
+              <h3 id="dash-stat-vouchers" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
+            </div>
+            <div class="p-2 bg-sky-500/10 text-sky-400 rounded-xl">
+              <i data-lucide="receipt" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p id="dash-stat-vtypes-summary" class="text-xs text-slate-400 mt-3 font-medium">8 Voucher Types</p>
+        </div>
+
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Debit Turnover</p>
+              <h3 id="dash-stat-debit" class="text-2xl font-bold text-emerald-400 mt-1 font-mono tabular-nums">₹0.00</h3>
+            </div>
+            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+              <i data-lucide="arrow-down-left" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 mt-3 font-medium">Total Debits Recorded</p>
+        </div>
+
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Credit Turnover</p>
+              <h3 id="dash-stat-credit" class="text-2xl font-bold text-indigo-400 mt-1 font-mono tabular-nums">₹0.00</h3>
+            </div>
+            <div class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
+              <i data-lucide="arrow-up-right" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 mt-3 font-medium">Total Credits Recorded</p>
+        </div>
+
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Active Ledgers</p>
+              <h3 id="dash-stat-ledgers" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
+            </div>
+            <div class="p-2 bg-purple-500/10 text-purple-400 rounded-xl">
+              <i data-lucide="users" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p id="dash-stat-groups" class="text-xs text-slate-400 mt-3 font-medium">Across 23 Groups</p>
+        </div>
+      </div>
+
+      <!-- Charts & Top Ledgers Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Monthly Activity Chart (2 cols) -->
+        <div class="lg:col-span-2 bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-white">Monthly Transaction Turnover</h3>
+              <p class="text-xs text-slate-400">Debit vs Credit activity over time</p>
+            </div>
+          </div>
+          <div class="h-64">
+            <canvas id="monthlyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Ledgers List (1 col) -->
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-white">Top Accounts by Volume</h3>
+              <p class="text-xs text-slate-400">Highest transaction movement</p>
+            </div>
+            <button onclick="switchTab('trial-balance')" class="text-xs text-sky-400 hover:text-sky-300 font-medium">View All</button>
+          </div>
+          <div id="dash-top-ledgers-list" class="space-y-3 flex-1 overflow-y-auto pr-1">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Voucher Breakdown Pills -->
+      <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm">
+        <h3 class="text-sm font-bold text-white mb-3">Vouchers by Type</h3>
+        <div id="dash-vtype-pills" class="flex flex-wrap gap-2.5">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- 2. DAYBOOK (VOUCHERS GRID) VIEW -->
+    <section id="view-daybook" class="tab-view space-y-4 hidden">
+      
+      <!-- Top Filters Bar -->
+      <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 shadow-md space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          
+          <!-- Search input -->
+          <div class="relative lg:col-span-2">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+            <input type="text" id="filter-search" oninput="debounceApplyDaybookFilter()" placeholder="Search narration, party, voucher no, ledger..." class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-sky-500 transition-colors">
+          </div>
+
+          <!-- Voucher type filter -->
+          <div>
+            <select id="filter-vtype" onchange="applyDaybookFilter()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-sky-500 transition-colors">
+              <option value="">All Voucher Types</option>
+              <option value="Journal">Journal</option>
+              <option value="Purchase">Purchase</option>
+              <option value="Payment">Payment</option>
+              <option value="Sales">Sales</option>
+              <option value="Receipt">Receipt</option>
+              <option value="Contra">Contra</option>
+              <option value="Debit Note">Debit Note</option>
+              <option value="Credit Note">Credit Note</option>
+            </select>
+          </div>
+
+          <!-- Date From -->
+          <div>
+            <input type="date" id="filter-date-from" onchange="applyDaybookFilter()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-sky-500 transition-colors">
+          </div>
+
+          <!-- Date To -->
+          <div>
+            <input type="date" id="filter-date-to" onchange="applyDaybookFilter()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-sky-500 transition-colors">
+          </div>
+
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-700/50">
+          <div class="flex items-center gap-3">
+            <span id="daybook-results-count" class="text-xs text-slate-400 font-mono">Showing 0 of 0 entries</span>
+            <button onclick="resetDaybookFilters()" class="text-xs text-sky-400 hover:text-sky-300 font-medium underline">Reset Filters</button>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <button onclick="openNewVoucherModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg transition-colors">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>New Voucher</span>
+            </button>
+            <button onclick="exportCSV('daybook')" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg transition-colors">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Table Card -->
+      <div class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-700/80 uppercase tracking-wider text-[11px]">
+              <tr>
+                <th class="px-4 py-3 cursor-pointer" onclick="toggleDaybookSort('date')">
+                  <div class="flex items-center gap-1">Date <i data-lucide="arrow-up-down" class="w-3 h-3 opacity-60"></i></div>
+                </th>
+                <th class="px-4 py-3">Type</th>
+                <th class="px-4 py-3">Vch No</th>
+                <th class="px-4 py-3">Particulars / Party</th>
+                <th class="px-4 py-3">Debit Ledgers</th>
+                <th class="px-4 py-3">Credit Ledgers</th>
+                <th class="px-4 py-3 text-right">Amount (₹)</th>
+                <th class="px-4 py-3">Narration</th>
+                <th class="px-4 py-3 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="daybook-tbody" class="divide-y divide-slate-700/40">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Table Footer / Pagination -->
+        <div class="px-4 py-3 bg-slate-900/80 border-t border-slate-700/80 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">Rows per page:</span>
+            <select id="daybook-limit-select" onchange="changeDaybookLimit()" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="250">250</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="changeDaybookPage(-1)" id="btn-prev-page" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700 disabled:opacity-40">Previous</button>
+            <span id="daybook-page-info" class="text-xs text-slate-300 font-mono">Page 1 of 1</span>
+            <button onclick="changeDaybookPage(1)" id="btn-next-page" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700 disabled:opacity-40">Next</button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- 3. GSTR-2B RECONCILIATION VIEW -->
+    <section id="view-gstr2b" class="tab-view space-y-6 hidden">
+      <!-- Top Reco Control Bar -->
+      <div class="bg-slate-800/80 p-5 rounded-2xl border border-slate-700/80 shadow-md space-y-4">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <i data-lucide="shield-check" class="w-5 h-5 text-emerald-400"></i> GSTR-2B vs Tally Purchase Reconciliation
+            </h3>
+            <p class="text-xs text-slate-400">Reconcile supplier ITC in GSTR-2B against Tally Purchase Vouchers</p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button onclick="loadGSTR2BResults()" class="px-3.5 py-2 bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl border border-indigo-500/50 shadow-sm transition-all flex items-center gap-1.5">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+              <span>Reconcile 12-Month R2B Excel Folder</span>
+            </button>
+
+            <button onclick="document.getElementById('gstr2b-file-input').click()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-1.5">
+              <i data-lucide="upload" class="w-4 h-4"></i>
+              <span>Upload GSTR-2B (.xlsx / .json)</span>
+            </button>
+            <input type="file" id="gstr2b-file-input" onchange="handleGSTR2BUpload(event)" accept=".xlsx,.json,.zip" class="hidden">
+          </div>
+        </div>
+
+        <!-- Drop Zone for GSTR2B -->
+        <div id="gstr2b-drop-zone" onclick="document.getElementById('gstr2b-file-input').click()" class="border-2 border-dashed border-slate-700/80 hover:border-emerald-500 rounded-xl p-4 text-center cursor-pointer transition-colors bg-slate-950/40">
+          <p class="text-xs text-slate-300 font-medium">Drop your GSTR-2B Excel (.xlsx) or JSON file here to reconcile automatically</p>
+        </div>
+      </div>
+
+      <!-- Reco Summary Cards -->
+      <div id="gstr2b-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 hidden">
+        <div class="bg-slate-800/60 p-4 rounded-2xl border border-emerald-500/40 shadow-sm">
+          <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider block">Fully Matched</span>
+          <h3 id="reco-stat-matched" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Matched Invoice & Tax Amount</p>
+        </div>
+
+        <div class="bg-slate-800/60 p-4 rounded-2xl border border-amber-500/40 shadow-sm">
+          <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider block">Tax / Amount Mismatch</span>
+          <h3 id="reco-stat-mismatched" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Differs in Tax Amount or Total Value</p>
+        </div>
+
+        <div class="bg-slate-800/60 p-4 rounded-2xl border border-purple-500/40 shadow-sm">
+          <span class="text-xs font-semibold text-purple-400 uppercase tracking-wider block">Missing in Tally</span>
+          <h3 id="reco-stat-missing-tally" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
+          <p class="text-[11px] text-slate-400 mt-1">In GSTR-2B, but not booked in Tally</p>
+        </div>
+
+        <div class="bg-slate-800/60 p-4 rounded-2xl border border-rose-500/40 shadow-sm">
+          <span class="text-xs font-semibold text-rose-400 uppercase tracking-wider block">Missing in GSTR-2B</span>
+          <h3 id="reco-stat-missing-2b" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Booked in Tally, missing in GSTR-2B</p>
+        </div>
+      </div>
+
+      <!-- Reco Results Table -->
+      <div id="gstr2b-table-card" class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden hidden">
+        <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <button onclick="filterRecoTable('ALL')" id="reco-filter-all" class="px-3 py-1 bg-sky-600 text-white text-xs font-semibold rounded-lg">All Records</button>
+            <button onclick="filterRecoTable('MATCHED')" id="reco-filter-matched" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold rounded-lg border border-slate-700">Matched</button>
+            <button onclick="filterRecoTable('SHIFTED_BILL')" id="reco-filter-shifted" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold rounded-lg border border-slate-700">Shifted Bill</button>
+            <button onclick="filterRecoTable('MISMATCHED_AMOUNT')" id="reco-filter-mismatched" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-rose-400 text-xs font-semibold rounded-lg border border-slate-700">Mismatch</button>
+            <button onclick="filterRecoTable('MISSING_IN_TALLY')" id="reco-filter-missing-tally" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-purple-400 text-xs font-semibold rounded-lg border border-slate-700">Missing Tally</button>
+            <button onclick="filterRecoTable('MISSING_IN_2B')" id="reco-filter-missing-2b" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-semibold rounded-lg border border-slate-700">Missing 2B</button>
+          </div>
+          <button onclick="exportCSV('gstr2b')" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Export Reco CSV</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider text-[11px]">
+              <tr>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Supplier GSTIN</th>
+                <th class="px-4 py-3">Supplier Name</th>
+                <th class="px-4 py-3">Inv No (2B)</th>
+                <th class="px-4 py-3">Inv No (Tally)</th>
+                <th class="px-4 py-3">Date (2B)</th>
+                <th class="px-4 py-3">2B Period</th>
+                <th class="px-4 py-3 text-right">Tax (2B)</th>
+                <th class="px-4 py-3 text-right">Tax (Tally)</th>
+                <th class="px-4 py-3 text-right">Tax Diff</th>
+                <th class="px-4 py-3 text-right">Total (2B)</th>
+                <th class="px-4 py-3 text-right">Total (Tally)</th>
+                <th class="px-4 py-3">Audit Remarks</th>
+              </tr>
+            </thead>
+            <tbody id="reco-tbody" class="divide-y divide-slate-700/30">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 4. TRIAL BALANCE VIEW -->
+    <section id="view-trial-balance" class="tab-view space-y-4 hidden">
+      <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 shadow-md flex items-center justify-between">
+        <div class="relative max-w-md w-full">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+          <input type="text" id="tb-search-input" oninput="filterTrialBalanceTree()" placeholder="Filter group or ledger name..." class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-sky-500">
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="exportCSV('trial_balance')" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Export CSV</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-700/80 uppercase tracking-wider text-[11px]">
+              <tr>
+                <th class="px-4 py-3 w-1/2">Group / Ledger Name</th>
+                <th class="px-4 py-3 text-right">Opening (₹)</th>
+                <th class="px-4 py-3 text-right">Debit (₹)</th>
+                <th class="px-4 py-3 text-right">Credit (₹)</th>
+                <th class="px-4 py-3 text-right">Closing Balance (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="tb-tbody" class="divide-y divide-slate-700/30">
+              <!-- Rendered dynamically -->
+            </tbody>
+            <tfoot class="bg-slate-900 font-bold border-t-2 border-slate-700 text-slate-100">
+              <tr>
+                <td class="px-4 py-3">TOTAL TRIAL BALANCE</td>
+                <td id="tb-foot-op" class="px-4 py-3 text-right font-mono tabular-nums">₹0.00</td>
+                <td id="tb-foot-dr" class="px-4 py-3 text-right font-mono tabular-nums text-emerald-400">₹0.00</td>
+                <td id="tb-foot-cr" class="px-4 py-3 text-right font-mono tabular-nums text-indigo-400">₹0.00</td>
+                <td id="tb-foot-net" class="px-4 py-3 text-right font-mono tabular-nums">₹0.00</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 5. PROFIT & LOSS VIEW -->
+    <section id="view-pl-statement" class="tab-view space-y-6 hidden">
+      <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 shadow-md flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-white">Profit & Loss Statement</h3>
+          <p class="text-xs text-slate-400">Trading & Income/Expense summary for the financial period</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-700/80 pb-2">
+            <h4 class="text-sm font-bold text-rose-400 flex items-center gap-2">
+              <i data-lucide="arrow-down-right" class="w-4 h-4"></i> Expenses & Purchases
+            </h4>
+            <span id="pl-total-exp-top" class="font-bold text-white font-mono tabular-nums">₹0.00</span>
+          </div>
+
+          <div id="pl-expenses-list" class="space-y-3 text-xs">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-700/80 pb-2">
+            <h4 class="text-sm font-bold text-emerald-400 flex items-center gap-2">
+              <i data-lucide="arrow-up-right" class="w-4 h-4"></i> Incomes & Sales
+            </h4>
+            <span id="pl-total-inc-top" class="font-bold text-white font-mono tabular-nums">₹0.00</span>
+          </div>
+
+          <div id="pl-incomes-list" class="space-y-3 text-xs">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <div id="pl-net-result-banner" class="bg-slate-800/90 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-slate-400 uppercase font-semibold">Net Result</span>
+          <h3 id="pl-net-status" class="text-xl font-bold text-white">Calculating...</h3>
+        </div>
+        <div id="pl-net-amount" class="text-2xl font-bold font-mono tabular-nums text-emerald-400">
+          ₹0.00
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 6. LEDGER STATEMENT VIEW -->
+    <section id="view-ledger-statement" class="tab-view space-y-4 hidden">
+      <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="relative w-full md:w-96">
+          <label class="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1 block">Select Ledger Account</label>
+          <input type="text" id="ledger-picker-input" list="ledgers-datalist" onchange="loadSelectedLedgerStatement()" placeholder="Type to search ledger..." class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-sky-500 font-medium">
+          <datalist id="ledgers-datalist">
+            <!-- Rendered dynamically -->
+          </datalist>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button onclick="exportCSV('ledger')" class="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-xl">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>Export Statement (CSV)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 shadow-sm grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div class="md:col-span-2">
+          <span id="ls-group-name" class="text-xs text-sky-400 font-medium">Parent Group</span>
+          <h2 id="ls-ledger-title" class="text-xl font-bold text-white">Select a Ledger</h2>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">Opening Balance</span>
+          <span id="ls-opening-bal" class="text-sm font-bold text-white font-mono tabular-nums">₹0.00</span>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">Period Total Debit</span>
+          <span id="ls-total-dr" class="text-sm font-bold text-emerald-400 font-mono tabular-nums">₹0.00</span>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">Closing Balance</span>
+          <span id="ls-closing-bal" class="text-sm font-bold text-sky-400 font-mono tabular-nums">₹0.00</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-700/80 uppercase tracking-wider text-[11px]">
+              <tr>
+                <th class="px-4 py-3">Date</th>
+                <th class="px-4 py-3">Vch Type</th>
+                <th class="px-4 py-3">Vch No</th>
+                <th class="px-4 py-3">Particulars / Party</th>
+                <th class="px-4 py-3 text-right">Debit (Dr)</th>
+                <th class="px-4 py-3 text-right">Credit (Cr)</th>
+                <th class="px-4 py-3 text-right">Running Balance</th>
+                <th class="px-4 py-3">Narration</th>
+              </tr>
+            </thead>
+            <tbody id="ls-tbody" class="divide-y divide-slate-700/40">
+              <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Please select a ledger account above to view statement.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+
+  <!-- VOUCHER DETAIL & EDIT MODAL -->
+  <div id="voucher-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center hidden p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <button onclick="closeVoucherModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="modal-vtype-badge" class="px-2.5 py-0.5 rounded text-xs font-semibold">VOUCHER</span>
+            <span id="modal-vno-display" class="text-xs text-slate-400 font-mono">#0</span>
+          </div>
+          <h3 id="modal-party-display" class="text-lg font-bold text-white mt-1">Party Name</h3>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="modal-btn-toggle-edit" onclick="toggleVoucherEditMode()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs font-medium border border-slate-700">
+            Edit Voucher
+          </button>
+        </div>
+      </div>
+
+      <!-- READ ONLY VIEW -->
+      <div id="voucher-view-mode" class="space-y-4">
+        <div>
+          <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Accounting Entries</h4>
+          <div class="bg-slate-950/60 rounded-xl border border-slate-800 overflow-hidden">
+            <table class="w-full text-xs text-left text-slate-300">
+              <thead class="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800">
+                <tr>
+                  <th class="px-3 py-2">Dr / Cr</th>
+                  <th class="px-3 py-2">Ledger Account</th>
+                  <th class="px-3 py-2 text-right">Amount (₹)</th>
+                </tr>
+              </thead>
+              <tbody id="modal-entries-tbody" class="divide-y divide-slate-800/50">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Narration</h4>
+          <p id="modal-narration-display" class="text-xs text-slate-300 bg-slate-950/40 p-3 rounded-xl border border-slate-800 font-mono whitespace-pre-wrap">No narration</p>
+        </div>
+      </div>
+
+      <!-- EDIT MODE -->
+      <div id="voucher-edit-mode" class="space-y-4 hidden">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Voucher Type</label>
+            <input type="text" id="edit-vtype" class="w-full bg-slate-950 border border-slate-700 text-xs rounded-lg p-2 text-white">
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Date (YYYYMMDD)</label>
+            <input type="text" id="edit-vdate" class="w-full bg-slate-950 border border-slate-700 text-xs rounded-lg p-2 text-white font-mono">
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Voucher No</label>
+            <input type="text" id="edit-vno" class="w-full bg-slate-950 border border-slate-700 text-xs rounded-lg p-2 text-white">
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Party / Particulars</label>
+            <input type="text" id="edit-party" class="w-full bg-slate-950 border border-slate-700 text-xs rounded-lg p-2 text-white">
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-[11px] text-slate-400">Ledger Lines</label>
+            <button onclick="addEditLedgerRow()" class="text-[11px] text-sky-400 hover:underline">+ Add Entry Line</button>
+          </div>
+          <div id="edit-entries-container" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">Narration</label>
+          <textarea id="edit-narration" rows="2" class="w-full bg-slate-950 border border-slate-700 text-xs rounded-lg p-2 text-white font-mono"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+          <button onclick="toggleVoucherEditMode()" class="px-3 py-1.5 bg-slate-800 text-slate-300 rounded text-xs font-medium">Cancel</button>
+          <button onclick="saveVoucherEdits()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold">Save Changes</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- FILE UPLOAD MODAL -->
+  <div id="upload-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center hidden p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative">
+      <button onclick="closeUploadModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div>
+        <h3 class="text-lg font-bold text-white">Load Tally XML / ZIP</h3>
+        <p class="text-xs text-slate-400">Select or drop any Tally export file to parse instantly</p>
+      </div>
+
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()" class="border-2 border-dashed border-slate-700 hover:border-sky-500 rounded-2xl p-8 text-center cursor-pointer transition-colors space-y-3 bg-slate-950/40">
+        <i data-lucide="upload-cloud" class="w-10 h-10 text-sky-400 mx-auto"></i>
+        <div>
+          <p class="text-xs font-semibold text-slate-200">Click to upload or drag & drop</p>
+          <p class="text-[11px] text-slate-400">Supports .xml or .zip files</p>
+        </div>
+        <input type="file" id="file-input" onchange="handleFileSelected(event)" accept=".xml,.zip" class="hidden">
+      </div>
+
+      <div id="upload-progress" class="hidden text-center text-xs text-sky-400 font-medium">
+        Parsing file into database... please wait.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- APPLICATION JAVASCRIPT LOGIC -->
+  <script>
+    let appState = {
+      info: {},
+      summary: {},
+      daybook: {
+        page: 1,
+        limit: 50,
+        search: '',
+        vtype: '',
+        party: '',
+        date_from: '',
+        date_to: '',
+        sort_by: 'date',
+        sort_order: 'DESC'
+      },
+      tbData: null,
+      ledgers: [],
+      selectedLedger: '',
+      activeVoucherId: null,
+      isEditMode: false,
+      recoResults: null
+    };
+
+    let monthlyChartInstance = null;
+    let debounceTimer = null;
+
+    function formatMoney(amount) {
+      return '₹' + (amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr || dateStr.length !== 8) return dateStr || '-';
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${day}-${months[parseInt(month)-1]}-${year}`;
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      await fetchAppInfo();
+      await fetchSummary();
+      await loadDaybook();
+      await loadLedgersList();
+    });
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('text-sky-400', 'border-sky-500');
+        btn.classList.add('text-slate-400', 'border-transparent');
+      });
+      document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
+
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-400', 'border-transparent');
+        activeBtn.classList.add('text-sky-400', 'border-sky-500');
+      }
+
+      const activeView = document.getElementById(`view-${tabId}`);
+      if (activeView) {
+        activeView.classList.remove('hidden');
+      }
+
+      if (tabId === 'trial-balance' && !appState.tbData) {
+        loadTrialBalance();
+      } else if (tabId === 'pl-statement') {
+        loadPLStatement();
+      } else if (tabId === 'gstr2b' && !appState.recoResults) {
+        loadGSTR2BResults();
+      }
+    }
+
+    async function fetchAppInfo() {
+      try {
+        const res = await fetch('/api/info');
+        const info = await res.json();
+        appState.info = info;
+
+        document.getElementById('header-file-name').innerText = info.file_name || 'Tally XML';
+        document.getElementById('header-company-name').innerText = info.company_name || 'Company';
+        document.getElementById('header-date-range').innerText = `${formatDate(info.min_date)} to ${formatDate(info.max_date)}`;
+        document.getElementById('header-voucher-count').innerText = `${(info.voucher_count || 0).toLocaleString()} Vouchers`;
+      } catch (err) {
+        console.error('Failed to fetch info:', err);
+      }
+    }
+
+    async function fetchSummary() {
+      try {
+        const res = await fetch('/api/summary');
+        const summary = await res.json();
+        appState.summary = summary;
+
+        document.getElementById('dash-stat-vouchers').innerText = summary.info.voucher_count.toLocaleString();
+        document.getElementById('dash-stat-debit').innerText = formatMoney(summary.total_debit);
+        document.getElementById('dash-stat-credit').innerText = formatMoney(summary.total_credit);
+        document.getElementById('dash-stat-ledgers').innerText = summary.info.ledger_count.toLocaleString();
+        document.getElementById('dash-stat-groups').innerText = `Across ${summary.info.group_count} Groups`;
+
+        const pillsContainer = document.getElementById('dash-vtype-pills');
+        pillsContainer.innerHTML = summary.voucher_types.map(vt => {
+          const bClass = `badge-vtype-${vt.vtype.toLowerCase().replace(/\s+/g, '')}`;
+          return `<div onclick="filterByVtype('${vt.vtype}')" class="cursor-pointer border border-slate-700/60 px-3 py-1.5 rounded-xl flex items-center gap-2 hover:border-sky-500 transition-colors ${bClass}">
+            <span class="font-semibold text-xs">${vt.vtype}</span>
+            <span class="text-[11px] opacity-80 font-mono">(${vt.count})</span>
+          </div>`;
+        }).join('');
+
+        const topLedgersContainer = document.getElementById('dash-top-ledgers-list');
+        topLedgersContainer.innerHTML = summary.top_ledgers.map(l => {
+          const totalVol = l.debit + l.credit;
+          return `<div onclick="openLedgerStatement('${l.ledger}')" class="p-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 cursor-pointer transition-colors">
+            <div class="flex justify-between items-center text-xs">
+              <span class="font-semibold text-white truncate max-w-[180px]">${l.ledger}</span>
+              <span class="font-mono text-sky-400 font-medium">${formatMoney(totalVol)}</span>
+            </div>
+            <div class="text-[10px] text-slate-400 flex justify-between mt-1">
+              <span>Group: ${l.parent}</span>
+              <span>Dr: ${formatMoney(l.debit)} | Cr: ${formatMoney(l.credit)}</span>
+            </div>
+          </div>`;
+        }).join('');
+
+        renderMonthlyChart(summary.monthly);
+      } catch (err) {
+        console.error('Failed to fetch summary:', err);
+      }
+    }
+
+    function renderMonthlyChart(monthlyData) {
+      const ctx = document.getElementById('monthlyChart').getContext('2d');
+      if (monthlyChartInstance) {
+        monthlyChartInstance.destroy();
+      }
+
+      const labels = monthlyData.map(m => {
+        const y = m.month.substring(0, 4);
+        const mo = m.month.substring(4, 6);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${months[parseInt(mo)-1]} ${y}`;
+      });
+
+      monthlyChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Debit (₹)',
+              data: monthlyData.map(m => m.debit),
+              backgroundColor: 'rgba(16, 185, 129, 0.7)',
+              borderRadius: 6,
+            },
+            {
+              label: 'Credit (₹)',
+              data: monthlyData.map(m => m.credit),
+              backgroundColor: 'rgba(99, 102, 241, 0.7)',
+              borderRadius: 6,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+            y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } }
+          }
+        }
+      });
+    }
+
+    function filterByVtype(vtype) {
+      document.getElementById('filter-vtype').value = vtype;
+      switchTab('daybook');
+      applyDaybookFilter();
+    }
+
+    async function loadDaybook() {
+      const p = appState.daybook;
+      const query = new URLSearchParams({
+        page: p.page,
+        limit: p.limit,
+        search: p.search,
+        vtype: p.vtype,
+        party: p.party,
+        date_from: p.date_from,
+        date_to: p.date_to,
+        sort_by: p.sort_by,
+        sort_order: p.sort_order
+      });
+
+      try {
+        const res = await fetch(`/api/daybook?${query}`);
+        const result = await res.json();
+        
+        document.getElementById('daybook-results-count').innerText = `Showing ${result.data.length} of ${result.total.toLocaleString()} vouchers`;
+        document.getElementById('daybook-page-info').innerText = `Page ${result.page} of ${result.pages}`;
+
+        document.getElementById('btn-prev-page').disabled = result.page <= 1;
+        document.getElementById('btn-next-page').disabled = result.page >= result.pages;
+
+        const tbody = document.getElementById('daybook-tbody');
+        if (result.data.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No transactions match the selected filters.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = result.data.map(v => {
+          const bClass = `badge-vtype-${(v.vtype||'').toLowerCase().replace(/\s+/g, '')}`;
+          const drPills = v.debit_ledgers.slice(0, 2).map(l => `<span class="bg-slate-900 border border-emerald-500/30 text-emerald-300 text-[10px] px-2 py-0.5 rounded truncate max-w-[120px] inline-block font-mono">${l}</span>`).join(' ');
+          const crPills = v.credit_ledgers.slice(0, 2).map(l => `<span class="bg-slate-900 border border-indigo-500/30 text-indigo-300 text-[10px] px-2 py-0.5 rounded truncate max-w-[120px] inline-block font-mono">${l}</span>`).join(' ');
+          
+          return `<tr class="hover:bg-slate-700/30 transition-colors">
+            <td class="px-4 py-3 font-mono text-slate-300 whitespace-nowrap">${formatDate(v.date)}</td>
+            <td class="px-4 py-3 whitespace-nowrap"><span class="px-2 py-0.5 text-[10px] font-semibold rounded ${bClass}">${v.vtype}</span></td>
+            <td class="px-4 py-3 font-mono text-slate-400 whitespace-nowrap">${v.vno || '-'}</td>
+            <td class="px-4 py-3 font-semibold text-white truncate max-w-[180px]">${v.party || '-'}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${drPills}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${crPills}</td>
+            <td class="px-4 py-3 text-right font-mono font-bold text-slate-100 whitespace-nowrap">${formatMoney(v.total_amount)}</td>
+            <td class="px-4 py-3 text-slate-400 truncate max-w-[200px]" title="${v.narration || ''}">${v.narration || '-'}</td>
+            <td class="px-4 py-3 text-center whitespace-nowrap">
+              <button onclick="openVoucherModal(${v.id})" class="px-2.5 py-1 bg-slate-700 hover:bg-sky-600 text-slate-200 hover:text-white rounded text-[11px] font-medium transition-colors">Details / Edit</button>
+            </td>
+          </tr>`;
+        }).join('');
+
+      } catch (err) {
+        console.error('Failed to load daybook:', err);
+      }
+    }
+
+    function debounceApplyDaybookFilter() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => { applyDaybookFilter(); }, 300);
+    }
+
+    function applyDaybookFilter() {
+      appState.daybook.search = document.getElementById('filter-search').value;
+      appState.daybook.vtype = document.getElementById('filter-vtype').value;
+      appState.daybook.date_from = document.getElementById('filter-date-from').value;
+      appState.daybook.date_to = document.getElementById('filter-date-to').value;
+      appState.daybook.page = 1;
+      loadDaybook();
+    }
+
+    function resetDaybookFilters() {
+      document.getElementById('filter-search').value = '';
+      document.getElementById('filter-vtype').value = '';
+      document.getElementById('filter-date-from').value = '';
+      document.getElementById('filter-date-to').value = '';
+      applyDaybookFilter();
+    }
+
+    function changeDaybookPage(delta) {
+      appState.daybook.page += delta;
+      loadDaybook();
+    }
+
+    function changeDaybookLimit() {
+      appState.daybook.limit = parseInt(document.getElementById('daybook-limit-select').value);
+      appState.daybook.page = 1;
+      loadDaybook();
+    }
+
+    function toggleDaybookSort(col) {
+      if (appState.daybook.sort_by === col) {
+        appState.daybook.sort_order = appState.daybook.sort_order === 'ASC' ? 'DESC' : 'ASC';
+      } else {
+        appState.daybook.sort_by = col;
+        appState.daybook.sort_order = 'DESC';
+      }
+      loadDaybook();
+    }
+
+    // Modal & Editing Handlers
+    async function openVoucherModal(vId) {
+      try {
+        appState.activeVoucherId = vId;
+        appState.isEditMode = false;
+        document.getElementById('voucher-view-mode').classList.remove('hidden');
+        document.getElementById('voucher-edit-mode').classList.add('hidden');
+
+        const res = await fetch(`/api/voucher/${vId}`);
+        const data = await res.json();
+        const v = data.voucher;
+        const entries = data.entries;
+
+        const bClass = `badge-vtype-${(v.vtype||'').toLowerCase().replace(/\s+/g, '')}`;
+        const bElem = document.getElementById('modal-vtype-badge');
+        bElem.innerText = v.vtype;
+        bElem.className = `px-2.5 py-0.5 rounded text-xs font-semibold ${bClass}`;
+
+        document.getElementById('modal-vno-display').innerText = v.vno ? `#${v.vno}` : '';
+        document.getElementById('modal-party-display').innerText = v.party || 'Accounting Voucher';
+        document.getElementById('modal-narration-display').innerText = v.narration || 'No narration attached';
+
+        const tbody = document.getElementById('modal-entries-tbody');
+        tbody.innerHTML = entries.map(e => `
+          <tr class="hover:bg-slate-900/40">
+            <td class="px-3 py-2 font-mono font-bold ${e.is_debit ? 'text-emerald-400' : 'text-indigo-400'}">${e.is_debit ? 'Dr' : 'Cr'}</td>
+            <td class="px-3 py-2 font-semibold text-white">${e.ledger}</td>
+            <td class="px-3 py-2 text-right font-mono font-bold">${formatMoney(e.amount)}</td>
+          </tr>
+        `).join('');
+
+        // Populate Edit Inputs
+        document.getElementById('edit-vtype').value = v.vtype;
+        document.getElementById('edit-vdate').value = v.date;
+        document.getElementById('edit-vno').value = v.vno || '';
+        document.getElementById('edit-party').value = v.party || '';
+        document.getElementById('edit-narration').value = v.narration || '';
+
+        renderEditLedgerRows(entries);
+
+        document.getElementById('voucher-modal').classList.remove('hidden');
+      } catch (err) {
+        console.error('Failed to load voucher details:', err);
+      }
+    }
+
+    function toggleVoucherEditMode() {
+      appState.isEditMode = !appState.isEditMode;
+      if (appState.isEditMode) {
+        document.getElementById('voucher-view-mode').classList.add('hidden');
+        document.getElementById('voucher-edit-mode').classList.remove('hidden');
+      } else {
+        document.getElementById('voucher-view-mode').classList.remove('hidden');
+        document.getElementById('voucher-edit-mode').classList.add('hidden');
+      }
+    }
+
+    function renderEditLedgerRows(entries) {
+      const container = document.getElementById('edit-entries-container');
+      container.innerHTML = entries.map((e, idx) => `
+        <div class="flex items-center gap-2 text-xs edit-row font-mono">
+          <select class="bg-slate-950 border border-slate-700 text-white rounded p-1.5 edit-is-debit">
+            <option value="1" ${e.is_debit ? 'selected' : ''}>Dr</option>
+            <option value="0" ${!e.is_debit ? 'selected' : ''}>Cr</option>
+          </select>
+          <input type="text" value="${e.ledger}" placeholder="Ledger Name" class="flex-1 bg-slate-950 border border-slate-700 text-white rounded p-1.5 edit-ledger-name">
+          <input type="number" step="0.01" value="${e.amount}" placeholder="Amount" class="w-28 bg-slate-950 border border-slate-700 text-white rounded p-1.5 edit-amount font-mono">
+          <button onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-300 font-bold px-1">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function addEditLedgerRow() {
+      const container = document.getElementById('edit-entries-container');
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-2 text-xs edit-row font-mono';
+      div.innerHTML = `
+        <select class="bg-slate-950 border border-slate-700 text-white rounded p-1.5 edit-is-debit">
+          <option value="1">Dr</option>
+          <option value="0">Cr</option>
+        </select>
+        <input type="text" placeholder="Ledger Name" class="flex-1 bg-slate-950 border border-slate-700 text-white rounded p-1.5 edit-ledger-name">
+        <input type="number" step="0.01" value="0.00" placeholder="Amount" class="w-28 bg-slate-950 border border-slate-700 text-white rounded p-1.5 edit-amount font-mono">
+        <button onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-300 font-bold px-1">✕</button>
+      `;
+      container.appendChild(div);
+    }
+
+    async function saveVoucherEdits() {
+      const v_id = appState.activeVoucherId;
+      const vtype = document.getElementById('edit-vtype').value;
+      const date = document.getElementById('edit-vdate').value;
+      const vno = document.getElementById('edit-vno').value;
+      const party = document.getElementById('edit-party').value;
+      const narration = document.getElementById('edit-narration').value;
+
+      const entries = [];
+      document.querySelectorAll('.edit-row').forEach(row => {
+        const is_debit = parseInt(row.querySelector('.edit-is-debit').value);
+        const ledger = row.querySelector('.edit-ledger-name').value;
+        const amount = parseFloat(row.querySelector('.edit-amount').value || 0);
+        if (ledger) entries.push({ is_debit, ledger, amount });
+      });
+
+      try {
+        const res = await fetch('/api/voucher/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: v_id, date, vtype, vno, party, narration, entries })
+        });
+        const resData = await res.json();
+        if (resData.success) {
+          alert('Voucher updated successfully!');
+          closeVoucherModal();
+          await loadDaybook();
+        } else {
+          alert('Error: ' + resData.error);
+        }
+      } catch (err) {
+        alert('Failed to update voucher: ' + err.message);
+      }
+    }
+
+    function closeVoucherModal() {
+      document.getElementById('voucher-modal').classList.add('hidden');
+    }
+
+    function openNewVoucherModal() {
+      alert("Use 'Details / Edit' on any voucher row to modify fields or ledger lines.");
+    }
+
+    // GSTR-2B Reconciliation Module
+    async function loadGSTR2BResults() {
+      try {
+        const res = await fetch('/api/gstr2b/results');
+        const reco = await res.json();
+        if (reco && reco.records) {
+          appState.recoResults = reco;
+          displayRecoSummary(reco);
+        }
+      } catch (err) {
+        console.error('Failed to load GSTR-2B results:', err);
+      }
+    }
+
+    function displayRecoSummary(reco) {
+      document.getElementById('reco-stat-matched').innerText = reco.summary.matched_count;
+      document.getElementById('reco-stat-mismatched').innerText = reco.summary.mismatched_count;
+      document.getElementById('reco-stat-missing-tally').innerText = reco.summary.missing_tally_count;
+      document.getElementById('reco-stat-missing-2b').innerText = reco.summary.missing_2b_count;
+
+      document.getElementById('gstr2b-summary-cards').classList.remove('hidden');
+      document.getElementById('gstr2b-table-card').classList.remove('hidden');
+
+      renderRecoTable('ALL');
+    }
+
+    async function handleGSTR2BUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/gstr2b/reconcile', {
+          method: 'POST',
+          body: formData
+        });
+        const reco = await res.json();
+        if (reco && reco.records) {
+          appState.recoResults = reco;
+          displayRecoSummary(reco);
+          alert(`Successfully reconciled ${reco.records.length} records!`);
+        } else {
+          alert('Error: ' + (reco.error || 'Failed to process file'));
+        }
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      }
+    }
+
+    async function runSampleGSTR2BReco() {
+      // Demo GSTR-2B data matching actual purchase vouchers in AivarFY26.zip
+      const sample_2b = {
+        "b2b": [
+          {
+            "ctin": "29AABCI2726B1ZY",
+            "cname": "Intergloble Aviation Limited 29",
+            "inv": [{ "inum": "KA1252604AA11085", "dt": "01-04-2025", "val": 1350.0, "items": [{"itm_det": {"txval": 0.0, "igst": 1350.0}}] }]
+          },
+          {
+            "ctin": "33AAXCS3733Q2ZG",
+            "cname": "Skylink Fibernet Pvt Ltd",
+            "inv": [{ "inum": "SFPL2526-5614", "dt": "01-04-2025", "val": 9999.64, "items": [{"itm_det": {"txval": 8474.32, "cgst": 762.66, "sgst": 762.66}}] }]
+          },
+          {
+            "ctin": "29DCYPS1441G1ZZ",
+            "cname": "Sks Advisor",
+            "inv": [{ "inum": "SKS/25-26/055", "dt": "01-04-2025", "val": 88500.0, "items": [{"itm_det": {"txval": 0.0, "igst": 88500.0}}] }]
+          },
+          {
+            "ctin": "33AABCM9999X1Z1",
+            "cname": "Unbooked Vendor Pvt Ltd",
+            "inv": [{ "inum": "INV-UNBOOKED-101", "dt": "15-04-2025", "val": 50000.0, "items": [{"itm_det": {"txval": 42372.88, "cgst": 3813.56, "sgst": 3813.56}}] }]
+          }
+        ]
+      };
+      await processGSTR2BData(sample_2b);
+    }
+
+    async function processGSTR2BData(jsonObj) {
+      try {
+        const res = await fetch('/api/gstr2b/reconcile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jsonObj)
+        });
+        const reco = await res.json();
+        appState.recoResults = reco;
+
+        document.getElementById('reco-stat-matched').innerText = reco.summary.matched_count;
+        document.getElementById('reco-stat-mismatched').innerText = reco.summary.mismatched_count;
+        document.getElementById('reco-stat-missing-tally').innerText = reco.summary.missing_tally_count;
+        document.getElementById('reco-stat-missing-2b').innerText = reco.summary.missing_2b_count;
+
+        document.getElementById('gstr2b-summary-cards').classList.remove('hidden');
+        document.getElementById('gstr2b-table-card').classList.remove('hidden');
+
+        renderRecoTable('ALL');
+      } catch (err) {
+        alert('Reconciliation failed: ' + err.message);
+      }
+    }
+
+    function filterRecoTable(statusFilter) {
+      renderRecoTable(statusFilter);
+    }
+
+    function renderRecoTable(statusFilter) {
+      if (!appState.recoResults) return;
+      const records = appState.recoResults.records;
+      const tbody = document.getElementById('reco-tbody');
+
+      const filtered = statusFilter === 'ALL' ? records : records.filter(r => r.status === statusFilter);
+
+      tbody.innerHTML = filtered.map(r => {
+        let badge = '';
+        if (r.status === 'MATCHED') badge = `<span class="bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] font-bold">MATCHED</span>`;
+        else if (r.status === 'SHIFTED_BILL') badge = `<span class="bg-amber-950 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] font-bold">SHIFTED BILL</span>`;
+        else if (r.status === 'MISMATCHED_AMOUNT') badge = `<span class="bg-rose-950 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded text-[10px] font-bold">TAX MISMATCH</span>`;
+        else if (r.status === 'MISSING_IN_TALLY') badge = `<span class="bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded text-[10px] font-bold">MISSING TALLY</span>`;
+        else if (r.status === 'MISSING_IN_2B') badge = `<span class="bg-slate-800 text-slate-300 border border-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">MISSING 2B</span>`;
+
+        const taxDiff = (r.tax_2b || 0) - (r.tax_tally || 0);
+        let diffColor = 'text-slate-400';
+        let diffFormatted = '₹0.00';
+        if (Math.abs(taxDiff) > 0.01) {
+          if (taxDiff > 0) {
+            diffColor = 'text-amber-400 font-bold';
+            diffFormatted = '+' + formatMoney(taxDiff);
+          } else {
+            diffColor = 'text-rose-400 font-bold';
+            diffFormatted = '-' + formatMoney(Math.abs(taxDiff));
+          }
+        }
+
+        const isInvMismatch = r.inv_no_2b !== '-' && r.inv_no_tally !== '-' && r.inv_no_2b !== r.inv_no_tally;
+
+        return `<tr class="hover:bg-slate-700/30">
+          <td class="px-4 py-2.5 whitespace-nowrap">${badge}</td>
+          <td class="px-4 py-2.5 font-mono text-sky-300 whitespace-nowrap">${r.gstin || '-'}</td>
+          <td class="px-4 py-2.5 font-semibold text-white truncate max-w-[180px]">${r.supplier || '-'}</td>
+          <td class="px-4 py-2.5 font-mono text-slate-200 whitespace-nowrap">${r.inv_no_2b || '-'}</td>
+          <td class="px-4 py-2.5 font-mono ${isInvMismatch ? 'text-amber-400 font-bold' : 'text-slate-300'} whitespace-nowrap">${r.inv_no_tally || '-'}</td>
+          <td class="px-4 py-2.5 font-mono text-slate-400 whitespace-nowrap">${r.date_2b || '-'}</td>
+          <td class="px-4 py-2.5 font-mono text-indigo-300 whitespace-nowrap font-medium">${r.period_2b || '-'}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-emerald-400">${formatMoney(r.tax_2b)}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-sky-400">${formatMoney(r.tax_tally)}</td>
+          <td class="px-4 py-2.5 text-right font-mono ${diffColor}">${diffFormatted}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-slate-300">${formatMoney(r.val_2b)}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-slate-300">${formatMoney(r.val_tally)}</td>
+          <td class="px-4 py-2.5 text-xs ${isInvMismatch ? 'text-amber-300 font-medium' : 'text-slate-400'} whitespace-nowrap">${r.remarks || '-'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Trial Balance & P&L Logic
+    async function loadTrialBalance() {
+      try {
+        const res = await fetch('/api/trial-balance');
+        const tb = await res.json();
+        appState.tbData = tb;
+        renderTrialBalanceTree(tb);
+      } catch (err) {
+        console.error('Failed to load trial balance:', err);
+      }
+    }
+
+    function renderTrialBalanceTree(tb) {
+      const tbody = document.getElementById('tb-tbody');
+      const groupTree = {};
+      tb.groups['Primary'] = null;
+
+      let totalOp = 0, totalDr = 0, totalCr = 0, totalNet = 0;
+
+      tb.ledgers.forEach(l => {
+        totalOp += l.opening;
+        totalDr += l.debit;
+        totalCr += l.credit;
+        totalNet += l.closing;
+
+        const parent = l.parent || 'Primary';
+        if (!groupTree[parent]) groupTree[parent] = [];
+        groupTree[parent].push(l);
+      });
+
+      document.getElementById('tb-foot-op').innerText = formatMoney(totalOp);
+      document.getElementById('tb-foot-dr').innerText = formatMoney(totalDr);
+      document.getElementById('tb-foot-cr').innerText = formatMoney(totalCr);
+      document.getElementById('tb-foot-net').innerText = formatMoney(totalNet);
+
+      let html = '';
+      for (const [groupName, ledgers] of Object.entries(groupTree)) {
+        let gOp = 0, gDr = 0, gCr = 0, gClose = 0;
+        ledgers.forEach(l => { gOp += l.opening; gDr += l.debit; gCr += l.credit; gClose += l.closing; });
+
+        html += `<tr class="bg-slate-900/60 font-bold text-sky-300 text-xs border-y border-slate-700/80">
+          <td class="px-4 py-2.5 flex items-center gap-2">
+            <i data-lucide="folder" class="w-4 h-4 text-sky-400"></i> ${groupName}
+          </td>
+          <td class="px-4 py-2.5 text-right font-mono">${formatMoney(gOp)}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-emerald-400">${formatMoney(gDr)}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-indigo-400">${formatMoney(gCr)}</td>
+          <td class="px-4 py-2.5 text-right font-mono">${formatMoney(gClose)}</td>
+        </tr>`;
+
+        ledgers.forEach(l => {
+          html += `<tr class="hover:bg-slate-700/30 text-xs">
+            <td class="px-4 py-2 pl-8 flex items-center gap-2">
+              <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-500"></i>
+              <button onclick="openLedgerStatement('${l.name}')" class="text-slate-200 hover:text-sky-400 font-medium text-left">${l.name}</button>
+            </td>
+            <td class="px-4 py-2 text-right font-mono text-slate-400">${formatMoney(l.opening)}</td>
+            <td class="px-4 py-2 text-right font-mono text-slate-300">${formatMoney(l.debit)}</td>
+            <td class="px-4 py-2 text-right font-mono text-slate-300">${formatMoney(l.credit)}</td>
+            <td class="px-4 py-2 text-right font-mono font-semibold text-slate-100">${formatMoney(l.closing)}</td>
+          </tr>`;
+        });
+      }
+
+      tbody.innerHTML = html;
+      lucide.createIcons();
+    }
+
+    function filterTrialBalanceTree() {
+      const q = document.getElementById('tb-search-input').value.toLowerCase();
+      if (!appState.tbData) return;
+      if (!q) { renderTrialBalanceTree(appState.tbData); return; }
+
+      const filteredLedgers = appState.tbData.ledgers.filter(l => l.name.toLowerCase().includes(q) || l.parent.toLowerCase().includes(q));
+      renderTrialBalanceTree({ groups: appState.tbData.groups, ledgers: filteredLedgers });
+    }
+
+    async function loadPLStatement() {
+      if (!appState.tbData) await loadTrialBalance();
+      const tb = appState.tbData;
+
+      const expGroups = ['Direct Expenses', 'Indirect Expenses', 'Purchase Accounts', 'Depreciation/Amortisation', 'Repairs & Maintenance'];
+      const incGroups = ['Direct Incomes', 'Indirect Incomes', 'Sales Accounts'];
+
+      let totalExp = 0, totalInc = 0;
+      let expHtml = '', incHtml = '';
+
+      tb.ledgers.forEach(l => {
+        if (expGroups.includes(l.parent)) {
+          totalExp += l.closing;
+          expHtml += `<div onclick="openLedgerStatement('${l.name}')" class="flex justify-between p-2 rounded bg-slate-900/50 hover:bg-slate-900 border border-slate-800 cursor-pointer">
+            <span class="text-slate-300 font-medium truncate max-w-[200px]">${l.name}</span>
+            <span class="font-mono text-rose-300 font-semibold">${formatMoney(l.closing)}</span>
+          </div>`;
+        } else if (incGroups.includes(l.parent)) {
+          const val = Math.abs(l.closing);
+          totalInc += val;
+          incHtml += `<div onclick="openLedgerStatement('${l.name}')" class="flex justify-between p-2 rounded bg-slate-900/50 hover:bg-slate-900 border border-slate-800 cursor-pointer">
+            <span class="text-slate-300 font-medium truncate max-w-[200px]">${l.name}</span>
+            <span class="font-mono text-emerald-300 font-semibold">${formatMoney(val)}</span>
+          </div>`;
+        }
+      });
+
+      document.getElementById('pl-total-exp-top').innerText = formatMoney(totalExp);
+      document.getElementById('pl-total-inc-top').innerText = formatMoney(totalInc);
+      document.getElementById('pl-expenses-list').innerHTML = expHtml || `<p class="text-slate-500">No expense ledgers found.</p>`;
+      document.getElementById('pl-incomes-list').innerHTML = incHtml || `<p class="text-slate-500">No income ledgers found.</p>`;
+
+      const netResult = totalInc - totalExp;
+      const netStatusElem = document.getElementById('pl-net-status');
+      const netAmtElem = document.getElementById('pl-net-amount');
+
+      if (netResult >= 0) {
+        netStatusElem.innerText = "NET PROFIT";
+        netStatusElem.className = "text-xl font-bold text-emerald-400";
+        netAmtElem.innerText = formatMoney(netResult);
+        netAmtElem.className = "text-2xl font-bold font-mono tabular-nums text-emerald-400";
+      } else {
+        netStatusElem.innerText = "NET LOSS";
+        netStatusElem.className = "text-xl font-bold text-rose-400";
+        netAmtElem.innerText = formatMoney(Math.abs(netResult));
+        netAmtElem.className = "text-2xl font-bold font-mono tabular-nums text-rose-400";
+      }
+    }
+
+    async function loadLedgersList() {
+      try {
+        const res = await fetch('/api/ledgers');
+        const list = await res.json();
+        appState.ledgers = list;
+
+        const datalist = document.getElementById('ledgers-datalist');
+        datalist.innerHTML = list.map(l => `<option value="${l.name}">${l.parent}</option>`).join('');
+      } catch (err) {
+        console.error('Failed to load ledgers list:', err);
+      }
+    }
+
+    function openLedgerStatement(ledgerName) {
+      document.getElementById('ledger-picker-input').value = ledgerName;
+      switchTab('ledger-statement');
+      loadSelectedLedgerStatement();
+    }
+
+    async function loadSelectedLedgerStatement() {
+      const name = document.getElementById('ledger-picker-input').value;
+      if (!name) return;
+
+      try {
+        const res = await fetch(`/api/ledger-statement?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
+
+        document.getElementById('ls-ledger-title').innerText = data.ledger_name;
+        document.getElementById('ls-group-name').innerText = `Parent: ${data.parent}`;
+        document.getElementById('ls-opening-bal').innerText = formatMoney(data.opening_balance);
+        document.getElementById('ls-total-dr').innerText = formatMoney(data.total_debit);
+        document.getElementById('ls-closing-bal').innerText = formatMoney(data.closing_balance);
+
+        const tbody = document.getElementById('ls-tbody');
+        if (data.entries.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No transactions recorded for this ledger.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.entries.map(e => `
+          <tr class="hover:bg-slate-700/30">
+            <td class="px-4 py-2.5 font-mono text-slate-300">${formatDate(e.date)}</td>
+            <td class="px-4 py-2.5"><span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-800 border border-slate-700">${e.vtype}</span></td>
+            <td class="px-4 py-2.5 font-mono text-slate-400">${e.vno || '-'}</td>
+            <td class="px-4 py-2.5 font-semibold text-white truncate max-w-[180px]">${e.party || '-'}</td>
+            <td class="px-4 py-2.5 text-right font-mono text-emerald-400">${e.is_debit ? formatMoney(e.amount) : '-'}</td>
+            <td class="px-4 py-2.5 text-right font-mono text-indigo-400">${!e.is_debit ? formatMoney(e.amount) : '-'}</td>
+            <td class="px-4 py-2.5 text-right font-mono font-bold text-sky-300">${formatMoney(e.running_balance)}</td>
+            <td class="px-4 py-2.5 text-slate-400 truncate max-w-[200px]" title="${e.narration || ''}">${e.narration || '-'}</td>
+          </tr>
+        `).join('');
+
+      } catch (err) {
+        console.error('Failed to load ledger statement:', err);
+      }
+    }
+
+    function exportCSV(type) {
+      let url = `/api/export?type=${type}`;
+      if (type === 'ledger') {
+        const name = document.getElementById('ledger-picker-input').value;
+        if (!name) { alert('Please select a ledger account first!'); return; }
+        url += `&name=${encodeURIComponent(name)}`;
+      }
+      window.location.href = url;
+    }
+
+    function exportTallyXML() {
+      window.location.href = '/api/export/tally-xml';
+    }
+
+    function openUploadModal() { document.getElementById('upload-modal').classList.remove('hidden'); }
+    function closeUploadModal() { document.getElementById('upload-modal').classList.add('hidden'); }
+
+    async function handleFileSelected(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      document.getElementById('upload-progress').classList.remove('hidden');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const result = await res.json();
+        if (result.success) {
+          closeUploadModal();
+          alert('File loaded successfully! Reloading view...');
+          window.location.reload();
+        } else {
+          alert('Error loading file: ' + (result.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Failed to upload file: ' + err.message);
+      } finally {
+        document.getElementById('upload-progress').classList.add('hidden');
+      }
+    }
+  </script>
+  <footer class="bg-slate-900 border-t border-slate-800 py-3 px-4 text-center text-xs text-slate-500 mt-auto">
+    <span>Rexinux's Tally Analyser &copy; 2026 &bull; Developed by <strong class="text-sky-400 font-semibold">Rexinux</strong> &bull; 100% Offline & Private</span>
+  </footer>
+</body>
+</html>
