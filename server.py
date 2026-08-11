@@ -963,28 +963,71 @@ class TallyDatabase:
 
         return output.getvalue()
 
+def parse_gstr2b_json_bytes(file_bytes, filename=""):
+    invoices = []
+    try:
+        gstr2b_json = json.loads(file_bytes.decode('utf-8', errors='ignore'))
+        period_2b = "-"
+        if filename:
+            m = re.search(r'(\d{2})(\d{4})', filename)
+            if m:
+                month_num, year = m.group(1), m.group(2)
+                months_map = {'01':'Jan', '02':'Feb', '03':'Mar', '04':'Apr', '05':'May', '06':'Jun', '07':'Jul', '08':'Aug', '09':'Sep', '10':'Oct', '11':'Nov', '12':'Dec'}
+                period_2b = f"{months_map.get(month_num, month_num)}'{year[2:]}"
+        
+        if isinstance(gstr2b_json, dict):
+            b2b_list = gstr2b_json.get('b2b', []) or gstr2b_json.get('data', {}).get('b2b', [])
+            for supplier in b2b_list:
+                ctin = supplier.get('ctin', '').strip()
+                cname = supplier.get('cname', '').strip()
+                for inv in supplier.get('inv', []):
+                    inum = str(inv.get('inum', '')).strip()
+                    idt = inv.get('dt', '') or inv.get('idt', '')
+                    val = float(inv.get('val', 0))
+                    cgst, sgst, igst, txval = 0.0, 0.0, 0.0, 0.0
+                    for item in inv.get('items', []):
+                        det = item.get('itm_det', {})
+                        txval += float(det.get('txval', 0))
+                        cgst += float(det.get('cgst', 0))
+                        sgst += float(det.get('sgst', 0))
+                        igst += float(det.get('igst', 0))
+                    invoices.append({
+                        "ctin": ctin, "cname": cname, "inum": inum,
+                        "norm_inum": normalize_inv(inum), "dt": idt,
+                        "val": val, "txval": txval, "cgst": cgst, "sgst": sgst, "igst": igst,
+                        "tax": cgst + sgst + igst, "period_2b": period_2b, "filing_date": "-"
+                    })
+    except Exception as e:
+        print("JSON decode error:", e)
+    return invoices
+
 
 tally_db = TallyDatabase()
 
 def auto_load_r2b_files():
     r2b_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'R2B')
     if not os.path.exists(r2b_dir):
-        return
-    xlsx_files = [os.path.join(r2b_dir, f) for f in os.listdir(r2b_dir) if f.endswith('.xlsx')]
-    if not xlsx_files:
-        return
+        return []
+    all_files = [os.path.join(r2b_dir, f) for f in os.listdir(r2b_dir) if f.lower().endswith('.xlsx') or f.lower().endswith('.json')]
+    if not all_files:
+        return []
     
     all_invoices = []
-    for fpath in sorted(xlsx_files):
+    for fpath in sorted(all_files):
         try:
             with open(fpath, 'rb') as f:
-                invs = parse_gstr2b_xlsx_bytes(f.read())
+                content = f.read()
+                if fpath.lower().endswith('.xlsx'):
+                    invs = parse_gstr2b_xlsx_bytes(content, filename=os.path.basename(fpath))
+                else:
+                    invs = parse_gstr2b_json_bytes(content, filename=os.path.basename(fpath))
                 all_invoices.extend(invs)
         except Exception as e:
             print(f"Error reading {fpath}: {e}")
     if all_invoices:
-        print(f"Auto-reconciling {len(all_invoices)} GSTR-2B invoices from {len(xlsx_files)} Excel files...")
+        print(f"Auto-reconciling {len(all_invoices)} GSTR-2B invoices from {len(all_files)} files...")
         tally_db.reconcile_gstr2b(all_invoices)
+    return all_invoices
 
 class RequestHandler(BaseHTTPRequestHandler):
     def send_json(self, data, status=200):
@@ -1097,6 +1140,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
+        elif path == '/api/gstr2b/clear':
+            r2b_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'R2B')
+            if os.path.exists(r2b_dir):
+                for f in os.listdir(r2b_dir):
+                    fp = os.path.join(r2b_dir, f)
+                    if os.path.isfile(fp) and not f.startswith('.'):
+                        try: os.remove(fp)
+                        except Exception: pass
+            tally_db.reco_results = None
+            self.send_json({"success": True, "message": "GSTR-2B files cleared"})
+
         else:
             self.send_json({"error": "Endpoint not found"}, 404)
 
@@ -1138,10 +1192,12 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         elif parsed.path == '/api/gstr2b/reconcile':
             content_type = self.headers.get('Content-Type', '')
-            file_bytes = None
-            filename = self.headers.get('X-File-Name', 'gstr2b.xlsx')
+            default_filename = self.headers.get('X-File-Name', 'gstr2b.xlsx')
             
-            invoices = []
+            r2b_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'R2B')
+            os.makedirs(r2b_dir, exist_ok=True)
+            
+            file_entries = []
             
             if 'multipart/form-data' in content_type:
                 boundary = content_type.split('boundary=')[-1].encode('utf-8')
@@ -1152,49 +1208,39 @@ class RequestHandler(BaseHTTPRequestHandler):
                         if header_end != -1:
                             headers_text = part[:header_end].decode('utf-8', errors='ignore')
                             fn_match = re.search(r'filename="([^"]+)"', headers_text)
-                            if fn_match:
-                                filename = fn_match.group(1)
-                            file_bytes = part[header_end + 4:].rstrip(b'\r\n--')
-                            break
+                            fn = fn_match.group(1) if fn_match else default_filename
+                            fbytes = part[header_end + 4:].rstrip(b'\r\n--')
+                            if fbytes:
+                                file_entries.append((os.path.basename(fn), fbytes))
             elif 'application/json' in content_type:
-                try:
-                    gstr2b_json = json.loads(raw_body.decode('utf-8'))
-                    if isinstance(gstr2b_json, dict):
-                        b2b_list = gstr2b_json.get('b2b', []) or gstr2b_json.get('data', {}).get('b2b', [])
-                        for supplier in b2b_list:
-                            ctin = supplier.get('ctin', '').strip()
-                            cname = supplier.get('cname', '').strip()
-                            for inv in supplier.get('inv', []):
-                                inum = str(inv.get('inum', '')).strip()
-                                idt = inv.get('dt', '') or inv.get('idt', '')
-                                val = float(inv.get('val', 0))
-                                cgst, sgst, igst, txval = 0.0, 0.0, 0.0, 0.0
-                                for item in inv.get('items', []):
-                                    det = item.get('itm_det', {})
-                                    txval += float(det.get('txval', 0))
-                                    cgst += float(det.get('cgst', 0))
-                                    sgst += float(det.get('sgst', 0))
-                                    igst += float(det.get('igst', 0))
-                                invoices.append({
-                                    "ctin": ctin, "cname": cname, "inum": inum,
-                                    "norm_inum": normalize_inv(inum), "dt": idt,
-                                    "val": val, "txval": txval, "cgst": cgst, "sgst": sgst, "igst": igst,
-                                    "tax": cgst + sgst + igst
-                                })
-                except Exception as e:
-                    print("JSON decode error:", e)
+                if raw_body:
+                    file_entries.append(("upload.json", raw_body))
             else:
-                file_bytes = raw_body
+                if raw_body:
+                    file_entries.append((os.path.basename(default_filename), raw_body))
 
-            if file_bytes:
-                if filename.lower().endswith('.xlsx') or file_bytes.startswith(b'PK'):
-                    invoices = parse_gstr2b_xlsx_bytes(file_bytes, filename=filename)
+            for fname, fbytes in file_entries:
+                if fname.lower().endswith('.zip') or (fbytes.startswith(b'PK\x03\x04') and not fname.lower().endswith('.xlsx')):
+                    try:
+                        with zipfile.ZipFile(io.BytesIO(fbytes), 'r') as z:
+                            for zname in z.namelist():
+                                if zname.lower().endswith('.xlsx') or zname.lower().endswith('.json'):
+                                    zbytes = z.read(zname)
+                                    s_name = os.path.basename(zname)
+                                    if s_name:
+                                        with open(os.path.join(r2b_dir, s_name), 'wb') as out_f:
+                                            out_f.write(zbytes)
+                    except Exception as e:
+                        print("ZIP extraction error:", e)
+                elif fname.lower().endswith('.xlsx') or fname.lower().endswith('.json') or fbytes.startswith(b'PK'):
+                    with open(os.path.join(r2b_dir, fname), 'wb') as out_f:
+                        out_f.write(fbytes)
 
+            invoices = auto_load_r2b_files()
             if invoices:
-                res = tally_db.reconcile_gstr2b(invoices)
-                self.send_json(res)
+                self.send_json(tally_db.reco_results or {})
             else:
-                self.send_json({"error": "No valid GSTR-2B invoice records found in uploaded file"}, 400)
+                self.send_json({"error": "No valid GSTR-2B invoice records found in uploaded files"}, 400)
 
         elif parsed.path == '/api/voucher/update':
             try:

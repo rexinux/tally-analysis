@@ -379,20 +379,25 @@
           <div class="flex items-center gap-3">
             <button onclick="loadGSTR2BResults()" class="px-3.5 py-2 bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl border border-indigo-500/50 shadow-sm transition-all flex items-center gap-1.5">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-              <span>Reconcile 12-Month R2B Excel Folder</span>
+              <span>Reconcile 12-Month R2B Folder</span>
             </button>
 
             <button onclick="document.getElementById('gstr2b-file-input').click()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-1.5">
               <i data-lucide="upload" class="w-4 h-4"></i>
-              <span>Upload GSTR-2B (.xlsx / .json)</span>
+              <span>Upload GSTR-2B Files / ZIP</span>
             </button>
-            <input type="file" id="gstr2b-file-input" onchange="handleGSTR2BUpload(event)" accept=".xlsx,.json,.zip" class="hidden">
+            <input type="file" id="gstr2b-file-input" onchange="handleGSTR2BUpload(event)" accept=".xlsx,.json,.zip" multiple class="hidden">
+
+            <button onclick="clearGSTR2BFiles()" class="px-3 py-2 bg-slate-800 hover:bg-rose-950 text-rose-300 text-xs font-semibold rounded-xl border border-slate-700 hover:border-rose-500/50 shadow-sm transition-all flex items-center gap-1.5" title="Clear stored GSTR-2B files">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              <span>Clear 2B Data</span>
+            </button>
           </div>
         </div>
 
         <!-- Drop Zone for GSTR2B -->
         <div id="gstr2b-drop-zone" onclick="document.getElementById('gstr2b-file-input').click()" class="border-2 border-dashed border-slate-700/80 hover:border-emerald-500 rounded-xl p-4 text-center cursor-pointer transition-colors bg-slate-950/40">
-          <p class="text-xs text-slate-300 font-medium">Drop your GSTR-2B Excel (.xlsx) or JSON file here to reconcile automatically</p>
+          <p class="text-xs text-slate-300 font-medium">Drop your GSTR-2B ZIP archive or select multiple Excel (.xlsx) / JSON files at once to reconcile</p>
         </div>
       </div>
 
@@ -1189,11 +1194,13 @@
     }
 
     async function handleGSTR2BUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
 
       const formData = new FormData();
-      formData.append('file', file);
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
 
       try {
         const res = await fetch('/api/gstr2b/reconcile', {
@@ -1204,12 +1211,26 @@
         if (reco && reco.records) {
           appState.recoResults = reco;
           displayRecoSummary(reco);
-          alert(`Successfully reconciled ${reco.records.length} records!`);
+          alert(`Successfully loaded and reconciled ${reco.records.length} total records across your uploaded GSTR-2B files!`);
         } else {
-          alert('Error: ' + (reco.error || 'Failed to process file'));
+          alert('Error: ' + (reco.error || 'Failed to process files'));
         }
       } catch (err) {
         alert('Upload failed: ' + err.message);
+      }
+    }
+
+    async function clearGSTR2BFiles() {
+      if (!confirm('Are you sure you want to clear all stored GSTR-2B files?')) return;
+      try {
+        const res = await fetch('/api/gstr2b/clear');
+        const data = await res.json();
+        if (data.success) {
+          alert('GSTR-2B files cleared successfully!');
+          window.location.reload();
+        }
+      } catch (err) {
+        alert('Failed to clear GSTR-2B files: ' + err.message);
       }
     }
 
