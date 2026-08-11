@@ -429,8 +429,8 @@
       </div>
 
       <!-- Reco Results Table -->
-      <div id="gstr2b-table-card" class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden hidden">
-        <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div id="gstr2b-table-card" class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm hidden">
+        <div class="px-4 py-3 bg-slate-900 border-b border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sticky top-16 z-30 rounded-t-2xl shadow-md">
           <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
             <button onclick="filterRecoTable('ALL')" id="reco-filter-all" class="px-3 py-1 bg-sky-600 text-white text-xs font-semibold rounded-lg">All Records</button>
             <button onclick="filterRecoTable('MATCHED')" id="reco-filter-matched" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold rounded-lg border border-slate-700">Matched</button>
@@ -453,23 +453,23 @@
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs text-slate-300 relative border-collapse">
-            <thead class="bg-slate-900 text-slate-400 font-semibold uppercase tracking-wider text-[11px] sticky top-16 z-20 shadow-md">
+          <table class="w-full text-left text-xs text-slate-300 border-collapse">
+            <thead class="bg-slate-900 text-slate-400 font-semibold uppercase tracking-wider text-[11px] sticky top-[116px] z-20 shadow-md">
               <tr>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Status</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Supplier GSTIN</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Supplier Name</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Inv No (2B)</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Voucher & Inv No (Tally)</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Date (2B)</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Date (Tally)</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">2B Period</th>
-                <th class="px-4 py-3 text-right bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Tax (2B)</th>
-                <th class="px-4 py-3 text-right bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Tax (Tally)</th>
-                <th class="px-4 py-3 text-right bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Tax Diff</th>
-                <th class="px-4 py-3 text-right bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Total (2B)</th>
-                <th class="px-4 py-3 text-right bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Total (Tally)</th>
-                <th class="px-4 py-3 bg-slate-900 sticky top-16 z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Audit Remarks</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Status</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Supplier GSTIN</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Supplier Name</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Inv No (2B)</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Voucher & Inv No (Tally)</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Date (2B)</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Date (Tally)</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">2B Period</th>
+                <th class="px-4 py-3 text-right bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Tax (2B)</th>
+                <th class="px-4 py-3 text-right bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Tax (Tally)</th>
+                <th class="px-4 py-3 text-right bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Tax Diff</th>
+                <th class="px-4 py-3 text-right bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Total (2B)</th>
+                <th class="px-4 py-3 text-right bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Total (Tally)</th>
+                <th class="px-4 py-3 bg-slate-900 sticky top-[116px] z-20 shadow-sm border-b border-slate-800 whitespace-nowrap">Audit Remarks</th>
               </tr>
             </thead>
             <tbody id="reco-tbody" class="divide-y divide-slate-700/30">
