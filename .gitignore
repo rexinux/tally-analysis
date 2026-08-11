@@ -1,6 +1,9 @@
 # Private financial data files (Tally XMLs and GSTR-2B Excel/JSON)
 *.xml
 *.zip
+*.png
+*.jpg
+*.jpeg
 R2B/*.xlsx
 R2B/*.json
 R2B/*.csv
