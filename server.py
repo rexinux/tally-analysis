@@ -627,7 +627,7 @@ class TallyDatabase:
         
         # 1. Fetch Tally Purchase, Debit Note, Credit Note, and GST-related Journal Vouchers
         query = '''
-            SELECT v.id, v.date, v.vno, v.party, v.gstin,
+            SELECT v.id, v.date, v.vno, v.vtype, v.party, v.gstin,
                    SUM(CASE WHEN LOWER(le.ledger) LIKE '%cgst%' THEN le.amount ELSE 0 END) as cgst,
                    SUM(CASE WHEN LOWER(le.ledger) LIKE '%sgst%' OR LOWER(le.ledger) LIKE '%utgst%' THEN le.amount ELSE 0 END) as sgst,
                    SUM(CASE WHEN LOWER(le.ledger) LIKE '%igst%' THEN le.amount ELSE 0 END) as igst,
@@ -657,6 +657,7 @@ class TallyDatabase:
                 "id": str(v_id),
                 "date": tv["date"],
                 "vno": tv["vno"],
+                "vtype": tv["vtype"],
                 "norm_vno": normalize_inv(tv["vno"]),
                 "party": tv["party"],
                 "gstin": (tv["gstin"] or "").strip(),
@@ -697,6 +698,7 @@ class TallyDatabase:
                         "id": comb_id,
                         "date": first_tv["date"],
                         "vno": first_tv["vno"],
+                        "vtype": first_tv["vtype"],
                         "norm_vno": first_tv["norm_vno"],
                         "party": first_tv["party"],
                         "gstin": first_tv["gstin"],
@@ -745,6 +747,7 @@ class TallyDatabase:
                             "supplier": inv.get("cname", "") or inv.get("name", "") or tv["party"],
                             "inv_no_2b": inv.get("inum", ""),
                             "inv_no_tally": tv["vno"],
+                            "vtype_tally": tv["vtype"],
                             "date_2b": inv.get("dt", "") or inv.get("idate", ""),
                             "date_tally": tv["date"],
                             "period_2b": inv.get("period_2b", "-"),
@@ -780,6 +783,7 @@ class TallyDatabase:
                             "supplier": inv.get("cname", "") or inv.get("name", "") or tv["party"],
                             "inv_no_2b": inv_2b_no,
                             "inv_no_tally": inv_tally_no,
+                            "vtype_tally": tv["vtype"],
                             "date_2b": inv.get("dt", "") or inv.get("idate", ""),
                             "date_tally": tv["date"],
                             "period_2b": inv.get("period_2b", "-"),
@@ -815,6 +819,7 @@ class TallyDatabase:
                         "supplier": inv.get("cname", "") or inv.get("name", "") or tv["party"],
                         "inv_no_2b": inv.get("inum", ""),
                         "inv_no_tally": tv["vno"],
+                        "vtype_tally": tv["vtype"],
                         "date_2b": inv.get("dt", "") or inv.get("idate", ""),
                         "date_tally": tv["date"],
                         "period_2b": inv.get("period_2b", "-"),
@@ -840,6 +845,7 @@ class TallyDatabase:
                     "supplier": inv.get("cname", "") or inv.get("name", ""),
                     "inv_no_2b": inv.get("inum", ""),
                     "inv_no_tally": "-",
+                    "vtype_tally": "-",
                     "date_2b": inv.get("dt", "") or inv.get("idate", ""),
                     "date_tally": "-",
                     "period_2b": inv.get("period_2b", "-"),
@@ -865,6 +871,7 @@ class TallyDatabase:
                     "supplier": tv["party"],
                     "inv_no_2b": "-",
                     "inv_no_tally": tv["vno"],
+                    "vtype_tally": tv["vtype"],
                     "date_2b": "-",
                     "date_tally": tv["date"],
                     "period_2b": "-",
@@ -973,7 +980,7 @@ class TallyDatabase:
                 output.write(f'"{l["name"].replace('"', '""')}","{l["parent"].replace('"', '""')}","{l["opening"]}","{l["debit"]}","{l["credit"]}","{l["closing"]}"\n')
 
         elif report_type == 'gstr2b' and self.reco_results:
-            output.write("Status,Supplier GSTIN,Supplier Name,Invoice No (2B),Invoice No (Tally),Date (2B),Date (Tally),2B Return Period,GSTR-1 Filing Date,Tax Amount (2B),Tax Amount (Tally),Tax Diff (2B - Tally),Total Value (2B),Total Value (Tally),Audit Remarks\n")
+            output.write("Status,Supplier GSTIN,Supplier Name,Invoice No (2B),Voucher Type (Tally),Invoice No (Tally),Date (2B),Date (Tally),2B Return Period,GSTR-1 Filing Date,Tax Amount (2B),Tax Amount (Tally),Tax Diff (2B - Tally),Total Value (2B),Total Value (Tally),Audit Remarks\n")
             for r in self.reco_results["records"]:
                 sup = (r["supplier"] or "").replace('"', '""')
                 rem = (r.get("remarks", "")).replace('"', '""')
@@ -981,7 +988,8 @@ class TallyDatabase:
                 dt_tally = r.get("date_tally", "-")
                 if dt_tally and dt_tally != "-" and len(dt_tally) == 8:
                     dt_tally = f"{dt_tally[6:8]}/{dt_tally[4:6]}/{dt_tally[0:4]}"
-                output.write(f'"{r["status"]}","{r["gstin"]}","{sup}","{r["inv_no_2b"]}","{r["inv_no_tally"]}","{r["date_2b"]}","{dt_tally}","{r.get("period_2b", "-")}","{r.get("filing_date_2b", "-")}","{r["tax_2b"]}","{r["tax_tally"]}","{tax_diff:.2f}","{r["val_2b"]}","{r["val_tally"]}","{rem}"\n')
+                vt_tally = r.get("vtype_tally", "-")
+                output.write(f'"{r["status"]}","{r["gstin"]}","{sup}","{r["inv_no_2b"]}","{vt_tally}","{r["inv_no_tally"]}","{r["date_2b"]}","{dt_tally}","{r.get("period_2b", "-")}","{r.get("filing_date_2b", "-")}","{r["tax_2b"]}","{r["tax_tally"]}","{tax_diff:.2f}","{r["val_2b"]}","{r["val_tally"]}","{rem}"\n')
 
         return output.getvalue()
 
