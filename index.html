@@ -74,6 +74,20 @@
     .badge-vtype-contra { background-color: #155e75; color: #cffafe; }
     .badge-vtype-debitnote { background-color: #831843; color: #fce7f3; }
     .badge-vtype-creditnote { background-color: #701a75; color: #fae8ff; }
+
+    :root {
+      --header-height: 101px;
+    }
+
+    /* Freeze column headers at top of webpage below top navbar during page scroll */
+    #gstr2b-table-card table thead th,
+    .tab-view table thead th {
+      position: sticky;
+      top: var(--header-height, 101px);
+      z-index: 20;
+      background-color: #0f172a !important;
+      box-shadow: inset 0 -1px 0 #334155;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
@@ -429,8 +443,8 @@
       </div>
 
       <!-- Reco Results Table -->
-      <div id="gstr2b-table-card" class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden hidden">
-        <div class="px-4 py-3 bg-slate-900 border-b border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div id="gstr2b-table-card" class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm hidden">
+        <div class="px-4 py-3 bg-slate-900 border-b border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-t-2xl">
           <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
             <button onclick="filterRecoTable('ALL')" id="reco-filter-all" class="px-3 py-1 bg-sky-600 text-white text-xs font-semibold rounded-lg">All Records</button>
             <button onclick="filterRecoTable('MATCHED')" id="reco-filter-matched" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold rounded-lg border border-slate-700">Matched</button>
@@ -452,7 +466,7 @@
           </div>
         </div>
 
-        <div class="overflow-x-auto">
+        <div class="overflow-visible rounded-b-2xl">
           <table class="w-full text-left text-xs text-slate-300">
             <thead class="bg-slate-900 text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-800">
               <tr>
@@ -802,7 +816,15 @@
       return `${day}-${months[parseInt(month)-1]}-${year}`;
     }
 
+    function updateHeaderHeight() {
+      const header = document.querySelector('header');
+      if (header) {
+        document.documentElement.style.setProperty('--header-height', header.offsetHeight + 'px');
+      }
+    }
+
     window.addEventListener('DOMContentLoaded', async () => {
+      updateHeaderHeight();
       lucide.createIcons();
       await fetchAppInfo();
       await fetchSummary();
@@ -810,7 +832,10 @@
       await loadLedgersList();
     });
 
+    window.addEventListener('resize', updateHeaderHeight);
+
     function switchTab(tabId) {
+      updateHeaderHeight();
       document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('text-sky-400', 'border-sky-500');
         btn.classList.add('text-slate-400', 'border-transparent');
