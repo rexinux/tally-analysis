@@ -524,13 +524,21 @@ class TallyDatabase:
     def get_ledgers_list(self):
         c = self.db.cursor()
         rows = c.execute('''
-            SELECT l.name, l.parent, l.opening_balance,
-                   COALESCE(SUM(CASE WHEN le.is_debit = 1 THEN le.amount ELSE 0 END), 0) as debit,
-                   COALESCE(SUM(CASE WHEN le.is_debit = 0 THEN le.amount ELSE 0 END), 0) as credit
-            FROM ledgers l
-            LEFT JOIN ledger_entries le ON l.name = le.ledger
-            GROUP BY l.name
-            ORDER BY l.name ASC
+            SELECT 
+                all_l.name,
+                COALESCE(l.parent, 'Primary') as parent,
+                COALESCE(l.opening_balance, 0.0) as opening_balance,
+                COALESCE(SUM(CASE WHEN le.is_debit = 1 THEN le.amount ELSE 0 END), 0) as debit,
+                COALESCE(SUM(CASE WHEN le.is_debit = 0 THEN le.amount ELSE 0 END), 0) as credit
+            FROM (
+                SELECT name FROM ledgers
+                UNION
+                SELECT DISTINCT ledger as name FROM ledger_entries WHERE ledger IS NOT NULL AND TRIM(ledger) != ''
+            ) all_l
+            LEFT JOIN ledgers l ON all_l.name = l.name
+            LEFT JOIN ledger_entries le ON all_l.name = le.ledger
+            GROUP BY all_l.name
+            ORDER BY all_l.name ASC
         ''').fetchall()
         
         res = []
@@ -553,7 +561,7 @@ class TallyDatabase:
         
         l_info = c.execute("SELECT * FROM ledgers WHERE name = ?", (ledger_name,)).fetchone()
         op_bal = l_info["opening_balance"] if l_info else 0.0
-        parent = l_info["parent"] if l_info else "Unknown"
+        parent = l_info["parent"] if l_info else "Primary"
 
         conditions = ["le.ledger = ?", "v.is_cancelled = 0"]
         params = [ledger_name]
@@ -617,7 +625,7 @@ class TallyDatabase:
     def reconcile_gstr2b(self, gstr2b_invoices):
         c = self.db.cursor()
         
-        # 1. Fetch individual Tally Purchase, Debit Note, Credit Note, Journal Vouchers
+        # 1. Fetch Tally Purchase, Debit Note, Credit Note, and GST-related Journal Vouchers
         query = '''
             SELECT v.id, v.date, v.vno, v.party, v.gstin,
                    SUM(CASE WHEN LOWER(le.ledger) LIKE '%cgst%' THEN le.amount ELSE 0 END) as cgst,
@@ -626,7 +634,18 @@ class TallyDatabase:
                    (SELECT SUM(amount) FROM ledger_entries WHERE voucher_id = v.id AND is_debit = 1) as total_val
             FROM vouchers v
             JOIN ledger_entries le ON v.id = le.voucher_id
-            WHERE (v.vtype IN ('Purchase', 'Debit Note', 'Credit Note', 'Journal')) AND v.is_cancelled = 0
+            WHERE (
+                (v.vtype IN ('Purchase', 'Debit Note', 'Credit Note'))
+                OR
+                (v.vtype = 'Journal' AND (
+                    (v.gstin IS NOT NULL AND TRIM(v.gstin) != '')
+                    OR EXISTS (
+                        SELECT 1 FROM ledger_entries le2
+                        WHERE le2.voucher_id = v.id
+                          AND (LOWER(le2.ledger) LIKE '%cgst%' OR LOWER(le2.ledger) LIKE '%sgst%' OR LOWER(le2.ledger) LIKE '%igst%' OR LOWER(le2.ledger) LIKE '%utgst%')
+                    )
+                ))
+            ) AND v.is_cancelled = 0
             GROUP BY v.id
         '''
         tally_vouchers = c.execute(query).fetchall()
