@@ -429,9 +429,8 @@
       </div>
 
       <!-- Reco Results Table -->
-      <div id="gstr2b-table-card" class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden hidden">
-        <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-700 flex items-center justify-between">
-          <div class="flex items-center gap-2">
+        <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
             <button onclick="filterRecoTable('ALL')" id="reco-filter-all" class="px-3 py-1 bg-sky-600 text-white text-xs font-semibold rounded-lg">All Records</button>
             <button onclick="filterRecoTable('MATCHED')" id="reco-filter-matched" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold rounded-lg border border-slate-700">Matched</button>
             <button onclick="filterRecoTable('SHIFTED_BILL')" id="reco-filter-shifted" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold rounded-lg border border-slate-700">Shifted Bill</button>
@@ -439,10 +438,17 @@
             <button onclick="filterRecoTable('MISSING_IN_TALLY')" id="reco-filter-missing-tally" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-purple-400 text-xs font-semibold rounded-lg border border-slate-700">Missing Tally</button>
             <button onclick="filterRecoTable('MISSING_IN_2B')" id="reco-filter-missing-2b" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-semibold rounded-lg border border-slate-700">Missing 2B</button>
           </div>
-          <button onclick="exportCSV('gstr2b')" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            <span>Export Reco CSV</span>
-          </button>
+
+          <div class="flex items-center gap-3">
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+              <input type="text" id="reco-search-input" oninput="handleRecoSearch(this.value)" placeholder="Search party, GSTIN, inv, date, period..." class="pl-8 pr-3 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 w-full sm:w-64">
+            </div>
+            <button onclick="exportCSV('gstr2b')" class="flex items-center gap-1.5 px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg whitespace-nowrap">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Export Reco CSV</span>
+            </button>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -455,6 +461,7 @@
                 <th class="px-4 py-3">Inv No (2B)</th>
                 <th class="px-4 py-3">Inv No (Tally)</th>
                 <th class="px-4 py-3">Date (2B)</th>
+                <th class="px-4 py-3">Date (Tally)</th>
                 <th class="px-4 py-3">2B Period</th>
                 <th class="px-4 py-3 text-right">Tax (2B)</th>
                 <th class="px-4 py-3 text-right">Tax (Tally)</th>
@@ -1287,16 +1294,58 @@
       }
     }
 
+    let currentRecoFilter = 'ALL';
+    let recoSearchQuery = '';
+
     function filterRecoTable(statusFilter) {
-      renderRecoTable(statusFilter);
+      currentRecoFilter = statusFilter;
+      const ids = {
+        'ALL': 'reco-filter-all',
+        'MATCHED': 'reco-filter-matched',
+        'SHIFTED_BILL': 'reco-filter-shifted',
+        'MISMATCHED_AMOUNT': 'reco-filter-mismatched',
+        'MISSING_IN_TALLY': 'reco-filter-missing-tally',
+        'MISSING_IN_2B': 'reco-filter-missing-2b'
+      };
+      Object.keys(ids).forEach(k => {
+        const btn = document.getElementById(ids[k]);
+        if (btn) {
+          if (k === statusFilter) {
+            btn.className = 'px-3 py-1 bg-sky-600 text-white text-xs font-semibold rounded-lg shadow-sm';
+          } else {
+            btn.className = 'px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700';
+          }
+        }
+      });
+      renderRecoTable();
     }
 
-    function renderRecoTable(statusFilter) {
+    function handleRecoSearch(query) {
+      recoSearchQuery = (query || '').toLowerCase().trim();
+      renderRecoTable();
+    }
+
+    function renderRecoTable() {
       if (!appState.recoResults) return;
       const records = appState.recoResults.records;
       const tbody = document.getElementById('reco-tbody');
 
-      const filtered = statusFilter === 'ALL' ? records : records.filter(r => r.status === statusFilter);
+      let filtered = currentRecoFilter === 'ALL' ? records : records.filter(r => r.status === currentRecoFilter);
+
+      if (recoSearchQuery) {
+        filtered = filtered.filter(r => {
+          const dateTallyFmt = formatDate(r.date_tally);
+          const haystack = [
+            r.status, r.gstin, r.supplier,
+            r.inv_no_2b, r.inv_no_tally,
+            r.date_2b, dateTallyFmt, r.date_tally,
+            r.period_2b, r.filing_date_2b,
+            r.tax_2b, r.tax_tally, r.val_2b, r.val_tally,
+            r.remarks
+          ].join(' ').toLowerCase();
+          return haystack.includes(recoSearchQuery);
+        });
+      }
 
       tbody.innerHTML = filtered.map(r => {
         let badge = '';
@@ -1320,6 +1369,9 @@
         }
 
         const isInvMismatch = r.inv_no_2b !== '-' && r.inv_no_tally !== '-' && r.inv_no_2b !== r.inv_no_tally;
+        const date2b = r.date_2b || '-';
+        const dateTallyFmt = formatDate(r.date_tally);
+        const isDateDiff = date2b !== '-' && dateTallyFmt !== '-' && date2b !== dateTallyFmt;
 
         return `<tr class="hover:bg-slate-700/30">
           <td class="px-4 py-2.5 whitespace-nowrap">${badge}</td>
@@ -1327,14 +1379,15 @@
           <td class="px-4 py-2.5 font-semibold text-white truncate max-w-[180px]">${r.supplier || '-'}</td>
           <td class="px-4 py-2.5 font-mono text-slate-200 whitespace-nowrap">${r.inv_no_2b || '-'}</td>
           <td class="px-4 py-2.5 font-mono ${isInvMismatch ? 'text-amber-400 font-bold' : 'text-slate-300'} whitespace-nowrap">${r.inv_no_tally || '-'}</td>
-          <td class="px-4 py-2.5 font-mono text-slate-400 whitespace-nowrap">${r.date_2b || '-'}</td>
+          <td class="px-4 py-2.5 font-mono text-slate-300 whitespace-nowrap">${date2b}</td>
+          <td class="px-4 py-2.5 font-mono ${isDateDiff ? 'text-amber-400 font-bold' : 'text-slate-400'} whitespace-nowrap" title="${isDateDiff ? 'Date contradiction between GSTR-2B and Tally' : ''}">${dateTallyFmt} ${isDateDiff ? '⚠️' : ''}</td>
           <td class="px-4 py-2.5 font-mono text-indigo-300 whitespace-nowrap font-medium">${r.period_2b || '-'}</td>
           <td class="px-4 py-2.5 text-right font-mono text-emerald-400">${formatMoney(r.tax_2b)}</td>
           <td class="px-4 py-2.5 text-right font-mono text-sky-400">${formatMoney(r.tax_tally)}</td>
           <td class="px-4 py-2.5 text-right font-mono ${diffColor}">${diffFormatted}</td>
           <td class="px-4 py-2.5 text-right font-mono text-slate-300">${formatMoney(r.val_2b)}</td>
           <td class="px-4 py-2.5 text-right font-mono text-slate-300">${formatMoney(r.val_tally)}</td>
-          <td class="px-4 py-2.5 text-xs ${isInvMismatch ? 'text-amber-300 font-medium' : 'text-slate-400'} whitespace-nowrap">${r.remarks || '-'}</td>
+          <td class="px-4 py-2.5 text-xs ${isInvMismatch || isDateDiff ? 'text-amber-300 font-medium' : 'text-slate-400'} whitespace-nowrap">${r.remarks || (isDateDiff ? 'Date Mismatch' : '-')}</td>
         </tr>`;
       }).join('');
     }

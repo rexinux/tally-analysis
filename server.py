@@ -954,12 +954,15 @@ class TallyDatabase:
                 output.write(f'"{l["name"].replace('"', '""')}","{l["parent"].replace('"', '""')}","{l["opening"]}","{l["debit"]}","{l["credit"]}","{l["closing"]}"\n')
 
         elif report_type == 'gstr2b' and self.reco_results:
-            output.write("Status,Supplier GSTIN,Supplier Name,Invoice No (2B),Invoice No (Tally),Date (2B),2B Return Period,GSTR-1 Filing Date,Tax Amount (2B),Tax Amount (Tally),Tax Diff (2B - Tally),Total Value (2B),Total Value (Tally),Audit Remarks\n")
+            output.write("Status,Supplier GSTIN,Supplier Name,Invoice No (2B),Invoice No (Tally),Date (2B),Date (Tally),2B Return Period,GSTR-1 Filing Date,Tax Amount (2B),Tax Amount (Tally),Tax Diff (2B - Tally),Total Value (2B),Total Value (Tally),Audit Remarks\n")
             for r in self.reco_results["records"]:
                 sup = (r["supplier"] or "").replace('"', '""')
                 rem = (r.get("remarks", "")).replace('"', '""')
                 tax_diff = (r["tax_2b"] or 0.0) - (r["tax_tally"] or 0.0)
-                output.write(f'"{r["status"]}","{r["gstin"]}","{sup}","{r["inv_no_2b"]}","{r["inv_no_tally"]}","{r["date_2b"]}","{r.get("period_2b", "-")}","{r.get("filing_date_2b", "-")}","{r["tax_2b"]}","{r["tax_tally"]}","{tax_diff:.2f}","{r["val_2b"]}","{r["val_tally"]}","{rem}"\n')
+                dt_tally = r.get("date_tally", "-")
+                if dt_tally and dt_tally != "-" and len(dt_tally) == 8:
+                    dt_tally = f"{dt_tally[6:8]}/{dt_tally[4:6]}/{dt_tally[0:4]}"
+                output.write(f'"{r["status"]}","{r["gstin"]}","{sup}","{r["inv_no_2b"]}","{r["inv_no_tally"]}","{r["date_2b"]}","{dt_tally}","{r.get("period_2b", "-")}","{r.get("filing_date_2b", "-")}","{r["tax_2b"]}","{r["tax_tally"]}","{tax_diff:.2f}","{r["val_2b"]}","{r["val_tally"]}","{rem}"\n')
 
         return output.getvalue()
 
