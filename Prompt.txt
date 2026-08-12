@@ -1,0 +1,30 @@
+Act as an expert frontend developer. I want to modify the GSTR-2B reconciliation dashboard table.
+
+Currently, the columns in the table can be manually resized by dragging the borders.
+
+Please make the following changes to the table:
+
+1. DISABLE COLUMN RESIZING:
+- Remove the ability for the user to manually drag and resize the columns.
+- The column widths should be FIXED and based on the content priority (e.g., Invoice Number gets more width, Taxable Values get medium width, etc.).
+- Make sure the columns do not collapse or expand when the browser window is resized. Use a fixed table-layout (e.g., `table-layout: fixed` in CSS).
+- Ensure horizontal scrolling works properly if the total fixed width exceeds the screen.
+
+2. ENABLE HEADER SORTING (A-Z / Z-A):
+- Make the Table Headers (<th>) clickable for sorting.
+- When the user clicks a header (like 'Invoice Number', 'Date', or 'Taxable Value'), the table rows should sort in ascending (A to Z) order.
+- If the user clicks the same header again, it should sort in descending (Z to A) order.
+- Provide a visual indicator (like an up/down arrow ▲▼) next to the sorted column so the user knows which column is currently sorted and in what direction.
+- The sorting should intelligently handle the data type:
+   - Sort text fields alphabetically (A-Z / Z-A).
+   - Sort numerical fields (Taxable Value, Tax Amount) numerically from low to high and high to low.
+
+3. STATE PRESERVATION DURING SORTING:
+- IMPORTANT: When the user sorts the table, the "Notes" and "Rectified Status" must remain perfectly attached to their specific invoice row.
+- Ensure that sorting uses the unique row identifier (GSTIN + Invoice Number) so that no data gets mixed up between rows.
+
+4. UI/STYLE UPDATES:
+- Add a CSS hover effect on the headers to indicate they are clickable (e.g., change background color to light gray).
+- Make the column header text bold and slightly truncated with ellipsis (...) if the text overflows, but the full text must be visible in a tooltip (title="...") on hover.
+
+Please provide the updated HTML (Table structure), CSS (for fixed layout and hover effects), and the JavaScript logic (for the sorting function).

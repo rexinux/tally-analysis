@@ -67,7 +67,7 @@
       background: #475569;
     }
     .badge-vtype-journal { background-color: #334155; color: #cbd5e1; }
-    .badge-vtype-purchase { background-color: #7c2d12; color: #ffedd5; }
+    .badge-vtype-purchase { background-color: #047857; color: #ecfdf5; border: 1px solid #10b98150; font-weight: 700; }
     .badge-vtype-payment { background-color: #581c87; color: #f3e8ff; }
     .badge-vtype-sales { background-color: #1e3a8a; color: #dbeafe; }
     .badge-vtype-receipt { background-color: #14532d; color: #dcfce7; }
@@ -79,14 +79,34 @@
       --header-height: 101px;
     }
 
-    /* Freeze column headers at top of webpage below top navbar during page scroll */
-    #gstr2b-table-card table thead th,
-    .tab-view table thead th {
+    /* Scoped container for tables to prevent horizontal page overflow & keep sticky headers bounded */
+    .table-scroll-container {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: calc(100vh - 220px);
+    }
+
+    .table-scroll-container table thead th {
       position: sticky;
-      top: var(--header-height, 101px);
+      top: 0;
       z-index: 20;
       background-color: #0f172a !important;
       box-shadow: inset 0 -1px 0 #334155;
+    }
+
+    .table-scroll-container::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .table-scroll-container::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    .table-scroll-container::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    .table-scroll-container::-webkit-scrollbar-thumb:hover {
+      background: #475569;
     }
   </style>
 </head>
@@ -99,13 +119,13 @@
         
         <!-- Left: Logo & Company Name -->
         <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2 bg-gradient-to-r from-sky-500 to-indigo-600 p-2 rounded-xl text-white shadow-md shadow-sky-500/20">
+          <div class="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 p-2 rounded-xl text-white shadow-md shadow-emerald-500/20">
             <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
           </div>
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-lg font-bold text-white tracking-tight">Rexinux's Tally Analyser</h1>
-              <span id="header-file-name" class="text-xs bg-slate-800 text-sky-400 font-mono px-2.5 py-0.5 rounded-full border border-slate-700">Loading...</span>
+              <span id="header-file-name" class="text-xs bg-slate-800 text-emerald-400 font-mono px-2.5 py-0.5 rounded-full border border-slate-700">Loading...</span>
             </div>
             <p id="header-company-name" class="text-xs text-slate-400 font-medium truncate max-w-md">Initializing database...</p>
           </div>
@@ -114,23 +134,28 @@
         <!-- Middle: Quick Stats Badges -->
         <div class="hidden md:flex items-center gap-3">
           <div class="bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 flex items-center gap-2">
-            <i data-lucide="calendar" class="w-4 h-4 text-sky-400"></i>
+            <i data-lucide="calendar" class="w-4 h-4 text-emerald-400"></i>
             <span id="header-date-range" class="text-xs text-slate-300 font-mono">FY 2025-2026</span>
           </div>
           <div class="bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 flex items-center gap-2">
-            <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
+            <i data-lucide="layers" class="w-4 h-4 text-teal-400"></i>
             <span id="header-voucher-count" class="text-xs text-slate-300 font-mono">0 Vouchers</span>
           </div>
         </div>
 
-        <!-- Right Actions: Export Tally XML & Upload File -->
-        <div class="flex items-center gap-2.5">
-          <button onclick="exportTallyXML()" title="Export modified data as importable Tally XML" class="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">
-            <i data-lucide="download" class="w-4 h-4"></i>
-            <span>Export Tally XML</span>
+        <!-- Right Actions: Export Session (.rex), Export Tally XML & Upload File -->
+        <div class="flex items-center gap-2">
+          <button onclick="exportRexSession()" title="Export progress, notes & state as .rex session file" class="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-all whitespace-nowrap">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>Export Progress (.rex)</span>
           </button>
           
-          <button onclick="openUploadModal()" class="flex items-center gap-1.5 px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">
+          <button onclick="exportTallyXML()" title="Export all Tally vouchers & master ledgers as Tally XML file" class="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all whitespace-nowrap">
+            <i data-lucide="file-code" class="w-4 h-4"></i>
+            <span>Export Tally XML</span>
+          </button>
+
+          <button onclick="openUploadModal()" class="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all whitespace-nowrap">
             <i data-lucide="upload-cloud" class="w-4 h-4"></i>
             <span>Load New File</span>
           </button>
@@ -140,7 +165,7 @@
 
       <!-- NAVIGATION TABS -->
       <nav class="flex space-x-1 border-t border-slate-800/60 pt-1 overflow-x-auto">
-        <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn active px-4 py-2 text-xs font-medium text-sky-400 border-b-2 border-sky-500 flex items-center gap-2 whitespace-nowrap">
+        <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn active px-4 py-2 text-xs font-medium text-emerald-400 border-b-2 border-emerald-500 flex items-center gap-2 whitespace-nowrap">
           <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
           Dashboard
         </button>
@@ -318,9 +343,13 @@
           </div>
           
           <div class="flex items-center gap-2">
-            <button onclick="openNewVoucherModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg transition-colors">
+            <button onclick="openNewVoucherModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               <span>New Voucher</span>
+            </button>
+            <button onclick="exportTallyXML()" title="Export all Tally vouchers as XML file" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
+              <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
+              <span>Export Tally XML</span>
             </button>
             <button onclick="exportCSV('daybook')" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg transition-colors">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
@@ -332,7 +361,7 @@
 
       <!-- Data Table Card -->
       <div class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-scroll-container">
           <table class="w-full text-left text-xs text-slate-300">
             <thead class="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-700/80 uppercase tracking-wider text-[11px]">
               <tr>
@@ -398,9 +427,9 @@
 
             <button onclick="document.getElementById('gstr2b-file-input').click()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-1.5">
               <i data-lucide="upload" class="w-4 h-4"></i>
-              <span>Upload GSTR-2B Files / ZIP</span>
+              <span>Upload 2B Files / .rex Session</span>
             </button>
-            <input type="file" id="gstr2b-file-input" onchange="handleGSTR2BUpload(event)" accept=".xlsx,.json,.zip" multiple class="hidden">
+            <input type="file" id="gstr2b-file-input" onchange="handleGSTR2BUpload(event)" accept=".xlsx,.json,.zip,.rex" multiple class="hidden">
 
             <button onclick="clearGSTR2BFiles()" class="px-3 py-2 bg-slate-800 hover:bg-rose-950 text-rose-300 text-xs font-semibold rounded-xl border border-slate-700 hover:border-rose-500/50 shadow-sm transition-all flex items-center gap-1.5" title="Clear stored GSTR-2B files">
               <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -409,36 +438,48 @@
           </div>
         </div>
 
-        <!-- Drop Zone for GSTR2B -->
+        <!-- Drop Zone for GSTR2B & Session files -->
         <div id="gstr2b-drop-zone" onclick="document.getElementById('gstr2b-file-input').click()" class="border-2 border-dashed border-slate-700/80 hover:border-emerald-500 rounded-xl p-4 text-center cursor-pointer transition-colors bg-slate-950/40">
-          <p class="text-xs text-slate-300 font-medium">Drop your GSTR-2B ZIP archive or select multiple Excel (.xlsx) / JSON files at once to reconcile</p>
+          <p class="text-xs text-slate-300 font-medium">Drop your GSTR-2B Excel/JSON/ZIP files or saved progress session (.rex) file here to load instantly</p>
         </div>
       </div>
 
       <!-- Reco Summary Cards -->
-      <div id="gstr2b-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 hidden">
-        <div class="bg-slate-800/60 p-4 rounded-2xl border border-emerald-500/40 shadow-sm">
+      <div id="gstr2b-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 hidden">
+        <div onclick="filterRecoTable('MATCHED')" class="bg-slate-800/60 p-4 rounded-2xl border border-emerald-500/40 shadow-sm cursor-pointer hover:border-emerald-500 transition-colors">
           <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider block">Fully Matched</span>
           <h3 id="reco-stat-matched" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
           <p class="text-[11px] text-slate-400 mt-1">Matched Invoice & Tax Amount</p>
         </div>
 
-        <div class="bg-slate-800/60 p-4 rounded-2xl border border-amber-500/40 shadow-sm">
+        <div onclick="filterRecoTable('MISMATCHED_AMOUNT')" class="bg-slate-800/60 p-4 rounded-2xl border border-amber-500/40 shadow-sm cursor-pointer hover:border-amber-500 transition-colors">
           <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider block">Tax / Amount Mismatch</span>
           <h3 id="reco-stat-mismatched" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
           <p class="text-[11px] text-slate-400 mt-1">Differs in Tax Amount or Total Value</p>
         </div>
 
-        <div class="bg-slate-800/60 p-4 rounded-2xl border border-purple-500/40 shadow-sm">
+        <div onclick="filterRecoTable('MISSING_IN_TALLY')" class="bg-slate-800/60 p-4 rounded-2xl border border-purple-500/40 shadow-sm cursor-pointer hover:border-purple-500 transition-colors">
           <span class="text-xs font-semibold text-purple-400 uppercase tracking-wider block">Missing in Tally</span>
           <h3 id="reco-stat-missing-tally" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
           <p class="text-[11px] text-slate-400 mt-1">In GSTR-2B, but not booked in Tally</p>
         </div>
 
-        <div class="bg-slate-800/60 p-4 rounded-2xl border border-rose-500/40 shadow-sm">
+        <div onclick="filterRecoTable('MISSING_IN_2B')" class="bg-slate-800/60 p-4 rounded-2xl border border-rose-500/40 shadow-sm cursor-pointer hover:border-rose-500 transition-colors">
           <span class="text-xs font-semibold text-rose-400 uppercase tracking-wider block">Missing in GSTR-2B</span>
           <h3 id="reco-stat-missing-2b" class="text-2xl font-bold text-white mt-1 font-mono">0</h3>
           <p class="text-[11px] text-slate-400 mt-1">Booked in Tally, missing in GSTR-2B</p>
+        </div>
+
+        <div onclick="filterRecoTable('RCM')" class="bg-slate-800/60 p-4 rounded-2xl border border-amber-500/40 shadow-sm cursor-pointer hover:border-amber-500 transition-colors">
+          <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider block">RCM Applicable</span>
+          <h3 id="reco-stat-rcm" class="text-2xl font-bold text-amber-300 mt-1 font-mono">0</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Invoices under Reverse Charge</p>
+        </div>
+
+        <div onclick="filterRecoTable('RECTIFIED')" class="bg-slate-800/60 p-4 rounded-2xl border border-teal-500/40 shadow-sm cursor-pointer hover:border-teal-500 transition-colors">
+          <span class="text-xs font-semibold text-teal-400 uppercase tracking-wider block">Rectified / Resolved</span>
+          <h3 id="reco-stat-rectified" class="text-2xl font-bold text-teal-300 mt-1 font-mono">0</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Resolved & moved to Rectified</p>
         </div>
       </div>
 
@@ -452,12 +493,26 @@
             <button onclick="filterRecoTable('MISMATCHED_AMOUNT')" id="reco-filter-mismatched" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-rose-400 text-xs font-semibold rounded-lg border border-slate-700">Mismatch</button>
             <button onclick="filterRecoTable('MISSING_IN_TALLY')" id="reco-filter-missing-tally" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-purple-400 text-xs font-semibold rounded-lg border border-slate-700">Missing Tally</button>
             <button onclick="filterRecoTable('MISSING_IN_2B')" id="reco-filter-missing-2b" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-semibold rounded-lg border border-slate-700">Missing 2B</button>
+            <button onclick="filterRecoTable('RCM')" id="reco-filter-rcm" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1.5">
+              <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>RCM</span>
+              <span id="reco-count-badge-rcm" class="text-[10px] bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/30 font-mono">0</span>
+            </button>
+            <button onclick="filterRecoTable('RECTIFIED')" id="reco-filter-rectified" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-teal-400 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1.5">
+              <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-teal-400"></i>
+              <span>Rectified</span>
+              <span id="reco-count-badge-rectified" class="text-[10px] bg-teal-950 text-teal-300 px-1.5 py-0.5 rounded-full border border-teal-500/30 font-mono">0</span>
+            </button>
           </div>
 
           <div class="flex items-center gap-3">
+            <select id="reco-period-select" onchange="handleRecoPeriodChange(this.value)" class="bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-sky-400 font-semibold px-2.5 py-1 focus:outline-none focus:border-sky-500 cursor-pointer">
+              <option value="ALL">All Periods</option>
+            </select>
+
             <div class="relative">
               <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-              <input type="text" id="reco-search-input" oninput="handleRecoSearch(this.value)" placeholder="Search party, GSTIN, inv, date, period..." class="pl-8 pr-3 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 w-full sm:w-64">
+              <input type="text" id="reco-search-input" oninput="handleRecoSearch(this.value)" placeholder="Search party, GSTIN, inv, notes..." class="pl-8 pr-3 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 w-full sm:w-64">
             </div>
             <button onclick="exportCSV('gstr2b')" class="flex items-center gap-1.5 px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg whitespace-nowrap">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
@@ -466,29 +521,62 @@
           </div>
         </div>
 
-        <div class="overflow-visible rounded-b-2xl">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-900 text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-800">
+        <div class="table-scroll-container">
+          <table class="w-full text-left text-xs text-slate-300 table-fixed min-w-[1750px]">
+            <colgroup>
+              <col class="w-[110px]">
+              <col class="w-[150px]">
+              <col class="w-[180px]">
+              <col class="w-[130px]">
+              <col class="w-[170px]">
+              <col class="w-[100px]">
+              <col class="w-[100px]">
+              <col class="w-[90px]">
+              <col class="w-[110px]">
+              <col class="w-[110px]">
+              <col class="w-[110px]">
+              <col class="w-[110px]">
+              <col class="w-[110px]">
+              <col class="w-[75px]">
+              <col class="w-[170px]">
+              <col class="w-[120px]">
+              <col class="w-[185px]">
+            </colgroup>
+            <thead class="bg-slate-900 text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-800 select-none">
               <tr>
-                <th class="px-4 py-3">Status</th>
-                <th class="px-4 py-3">Supplier GSTIN</th>
-                <th class="px-4 py-3">Supplier Name</th>
-                <th class="px-4 py-3">Inv No (2B)</th>
-                <th class="px-4 py-3">Voucher & Inv No (Tally)</th>
-                <th class="px-4 py-3">Date (2B)</th>
-                <th class="px-4 py-3">Date (Tally)</th>
-                <th class="px-4 py-3">2B Period</th>
-                <th class="px-4 py-3 text-right">Tax (2B)</th>
-                <th class="px-4 py-3 text-right">Tax (Tally)</th>
-                <th class="px-4 py-3 text-right">Tax Diff</th>
-                <th class="px-4 py-3 text-right">Total (2B)</th>
-                <th class="px-4 py-3 text-right">Total (Tally)</th>
-                <th class="px-4 py-3">Audit Remarks</th>
+                <th onclick="handleRecoSort('status')" title="Sort by Status" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Status <span id="sort-icon-status">↕</span></th>
+                <th onclick="handleRecoSort('gstin')" title="Sort by Supplier GSTIN" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Supplier GSTIN <span id="sort-icon-gstin">↕</span></th>
+                <th onclick="handleRecoSort('supplier')" title="Sort by Supplier Name" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Supplier Name <span id="sort-icon-supplier">↕</span></th>
+                <th onclick="handleRecoSort('inv_no_2b')" title="Sort by Inv No (2B)" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Inv No (2B) <span id="sort-icon-inv_no_2b">↕</span></th>
+                <th onclick="handleRecoSort('inv_no_tally')" title="Sort by Voucher & Inv No (Tally)" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Voucher & Inv No (Tally) <span id="sort-icon-inv_no_tally">↕</span></th>
+                <th onclick="handleRecoSort('date_2b')" title="Sort by Date (2B)" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Date (2B) <span id="sort-icon-date_2b">↕</span></th>
+                <th onclick="handleRecoSort('date_tally')" title="Sort by Date (Tally)" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Date (Tally) <span id="sort-icon-date_tally">↕</span></th>
+                <th onclick="handleRecoSort('period_2b')" title="Sort by 2B Period" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">2B Period <span id="sort-icon-period_2b">↕</span></th>
+                <th onclick="handleRecoSort('tax_2b')" title="Sort by Tax Amount (2B)" class="px-3 py-3 text-right cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Tax (2B) <span id="sort-icon-tax_2b">↕</span></th>
+                <th onclick="handleRecoSort('tax_tally')" title="Sort by Tax Amount (Tally)" class="px-3 py-3 text-right cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Tax (Tally) <span id="sort-icon-tax_tally">↕</span></th>
+                <th onclick="handleRecoSort('tax_diff')" title="Sort by Tax Difference" class="px-3 py-3 text-right cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Tax Diff <span id="sort-icon-tax_diff">↕</span></th>
+                <th onclick="handleRecoSort('val_2b')" title="Sort by Total Invoice Value (2B)" class="px-3 py-3 text-right cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Total (2B) <span id="sort-icon-val_2b">↕</span></th>
+                <th onclick="handleRecoSort('val_tally')" title="Sort by Total Invoice Value (Tally)" class="px-3 py-3 text-right cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Total (Tally) <span id="sort-icon-val_tally">↕</span></th>
+                <th onclick="handleRecoSort('rcm')" title="Sort by RCM applicability" class="px-3 py-3 text-center cursor-pointer hover:bg-slate-800/80 transition-colors truncate">RCM <span id="sort-icon-rcm">↕</span></th>
+                <th class="px-3 py-3" title="Notes">Notes</th>
+                <th class="px-3 py-3 text-center" title="Actions">Action</th>
+                <th onclick="handleRecoSort('remarks')" title="Sort by Audit Remarks" class="px-3 py-3 cursor-pointer hover:bg-slate-800/80 transition-colors truncate">Audit Remarks <span id="sort-icon-remarks">↕</span></th>
               </tr>
             </thead>
             <tbody id="reco-tbody" class="divide-y divide-slate-700/30">
               <!-- Rendered dynamically -->
             </tbody>
+            <tfoot class="bg-slate-900/90 border-t-2 border-slate-700/80 text-slate-300 font-medium">
+              <tr>
+                <td colspan="10" class="px-4 py-3 text-left font-mono text-xs">
+                  <span id="reco-showing-count" class="text-sky-400 font-bold">Showing 0 of 0 records</span>
+                  <span id="reco-showing-detail" class="text-slate-400 text-[11px] ml-2.5">(Tax 2B: ₹0.00 | Tax Tally: ₹0.00)</span>
+                </td>
+                <td colspan="6" class="px-4 py-3 text-right font-mono text-xs">
+                  <span id="reco-filtered-count-badge" class="bg-sky-950 text-sky-300 border border-sky-600/40 px-3 py-1 rounded-lg font-bold shadow-sm">0 Records Found</span>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -511,7 +599,7 @@
       </div>
 
       <div class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-scroll-container">
           <table class="w-full text-left text-xs text-slate-300">
             <thead class="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-700/80 uppercase tracking-wider text-[11px]">
               <tr>
@@ -628,7 +716,7 @@
       </div>
 
       <div class="bg-slate-800/60 rounded-2xl border border-slate-700/60 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-scroll-container">
           <table class="w-full text-left text-xs text-slate-300">
             <thead class="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-700/80 uppercase tracking-wider text-[11px]">
               <tr>
@@ -670,7 +758,11 @@
         </div>
 
         <div class="flex items-center gap-2">
-          <button id="modal-btn-toggle-edit" onclick="toggleVoucherEditMode()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs font-medium border border-slate-700">
+          <button onclick="exportTallyXML()" title="Export updated database as Tally XML" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors">
+            <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
+            <span>Export Tally XML</span>
+          </button>
+          <button id="modal-btn-toggle-edit" onclick="toggleVoucherEditMode()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-lg text-xs font-medium border border-slate-700 transition-colors">
             Edit Voucher
           </button>
         </div>
@@ -756,17 +848,17 @@
       </button>
 
       <div>
-        <h3 class="text-lg font-bold text-white">Load Tally XML / ZIP</h3>
-        <p class="text-xs text-slate-400">Select or drop any Tally export file to parse instantly</p>
+        <h3 class="text-lg font-bold text-white">Load Tally XML / .rex Session</h3>
+        <p class="text-xs text-slate-400">Select or drop Tally export XML/ZIP or saved progress session (.rex) file</p>
       </div>
 
       <div id="drop-zone" onclick="document.getElementById('file-input').click()" class="border-2 border-dashed border-slate-700 hover:border-sky-500 rounded-2xl p-8 text-center cursor-pointer transition-colors space-y-3 bg-slate-950/40">
         <i data-lucide="upload-cloud" class="w-10 h-10 text-sky-400 mx-auto"></i>
         <div>
           <p class="text-xs font-semibold text-slate-200">Click to upload or drag & drop</p>
-          <p class="text-[11px] text-slate-400">Supports .xml or .zip files</p>
+          <p class="text-[11px] text-slate-400">Supports .xml, .zip, or .rex session progress files</p>
         </div>
-        <input type="file" id="file-input" onchange="handleFileSelected(event)" accept=".xml,.zip" class="hidden">
+        <input type="file" id="file-input" onchange="handleFileSelected(event)" accept=".xml,.zip,.rex,.json" class="hidden">
       </div>
 
       <div id="upload-progress" class="hidden text-center text-xs text-sky-400 font-medium">
@@ -837,7 +929,7 @@
     function switchTab(tabId) {
       updateHeaderHeight();
       document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('text-sky-400', 'border-sky-500');
+        btn.classList.remove('text-emerald-400', 'border-emerald-500');
         btn.classList.add('text-slate-400', 'border-transparent');
       });
       document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
@@ -845,7 +937,7 @@
       const activeBtn = document.getElementById(`tab-btn-${tabId}`);
       if (activeBtn) {
         activeBtn.classList.remove('text-slate-400', 'border-transparent');
-        activeBtn.classList.add('text-sky-400', 'border-sky-500');
+        activeBtn.classList.add('text-emerald-400', 'border-emerald-500');
       }
 
       const activeView = document.getElementById(`view-${tabId}`);
@@ -1003,16 +1095,16 @@
 
         tbody.innerHTML = result.data.map(v => {
           const bClass = `badge-vtype-${(v.vtype||'').toLowerCase().replace(/\s+/g, '')}`;
-          const drPills = v.debit_ledgers.slice(0, 2).map(l => `<span class="bg-slate-900 border border-emerald-500/30 text-emerald-300 text-[10px] px-2 py-0.5 rounded truncate max-w-[120px] inline-block font-mono">${l}</span>`).join(' ');
-          const crPills = v.credit_ledgers.slice(0, 2).map(l => `<span class="bg-slate-900 border border-indigo-500/30 text-indigo-300 text-[10px] px-2 py-0.5 rounded truncate max-w-[120px] inline-block font-mono">${l}</span>`).join(' ');
+          const drPills = v.debit_ledgers.slice(0, 2).map(l => `<span class="bg-slate-900/90 border border-emerald-500/30 text-emerald-300 text-[10px] px-2 py-0.5 rounded truncate max-w-[130px] inline-block font-mono" title="${escapeHtml(l)}">${escapeHtml(l)}</span>`).join('');
+          const crPills = v.credit_ledgers.slice(0, 2).map(l => `<span class="bg-slate-900/90 border border-indigo-500/30 text-indigo-300 text-[10px] px-2 py-0.5 rounded truncate max-w-[130px] inline-block font-mono" title="${escapeHtml(l)}">${escapeHtml(l)}</span>`).join('');
           
           return `<tr class="hover:bg-slate-700/30 transition-colors">
             <td class="px-4 py-3 font-mono text-slate-300 whitespace-nowrap">${formatDate(v.date)}</td>
             <td class="px-4 py-3 whitespace-nowrap"><span class="px-2 py-0.5 text-[10px] font-semibold rounded ${bClass}">${v.vtype}</span></td>
             <td class="px-4 py-3 font-mono text-slate-400 whitespace-nowrap">${v.vno || '-'}</td>
-            <td class="px-4 py-3 font-semibold text-white truncate max-w-[180px]">${v.party || '-'}</td>
-            <td class="px-4 py-3 whitespace-nowrap">${drPills}</td>
-            <td class="px-4 py-3 whitespace-nowrap">${crPills}</td>
+            <td class="px-4 py-3 font-semibold text-white truncate max-w-[180px]" title="${escapeHtml(v.party || '')}">${v.party || '-'}</td>
+            <td class="px-4 py-3 max-w-[200px]"><div class="flex flex-wrap gap-1">${drPills || '-'}</div></td>
+            <td class="px-4 py-3 max-w-[200px]"><div class="flex flex-wrap gap-1">${crPills || '-'}</div></td>
             <td class="px-4 py-3 text-right font-mono font-bold text-slate-100 whitespace-nowrap">${formatMoney(v.total_amount)}</td>
             <td class="px-4 py-3 text-slate-400 truncate max-w-[200px]" title="${v.narration || ''}">${v.narration || '-'}</td>
             <td class="px-4 py-3 text-center whitespace-nowrap">
@@ -1215,20 +1307,46 @@
     }
 
     function displayRecoSummary(reco) {
-      document.getElementById('reco-stat-matched').innerText = reco.summary.matched_count;
-      document.getElementById('reco-stat-mismatched').innerText = reco.summary.mismatched_count;
-      document.getElementById('reco-stat-missing-tally').innerText = reco.summary.missing_tally_count;
-      document.getElementById('reco-stat-missing-2b').innerText = reco.summary.missing_2b_count;
+      if (!reco || !reco.summary) return;
+      const records = reco.records || [];
+      const rectCount = records.filter(r => r.isRectified).length;
+      const matchCount = records.filter(r => (r.status === 'MATCHED' || r.status === 'SHIFTED_BILL') && !r.isRectified).length;
+      const misCount = records.filter(r => r.status === 'MISMATCHED_AMOUNT' && !r.isRectified).length;
+      const missTallyCount = records.filter(r => r.status === 'MISSING_IN_TALLY' && !r.isRectified).length;
+      const miss2bCount = records.filter(r => r.status === 'MISSING_IN_2B' && !r.isRectified).length;
+
+      const rcmCount = records.filter(r => r.rcm === 'Y' || r.is_rcm).length;
+
+      document.getElementById('reco-stat-matched').innerText = matchCount;
+      document.getElementById('reco-stat-mismatched').innerText = misCount;
+      document.getElementById('reco-stat-missing-tally').innerText = missTallyCount;
+      document.getElementById('reco-stat-missing-2b').innerText = miss2bCount;
+      document.getElementById('reco-stat-rcm').innerText = rcmCount;
+      document.getElementById('reco-stat-rectified').innerText = rectCount;
+
+      const badgeElem = document.getElementById('reco-count-badge-rectified');
+      if (badgeElem) badgeElem.innerText = rectCount;
+
+      const rcmBadge = document.getElementById('reco-count-badge-rcm');
+      if (rcmBadge) rcmBadge.innerText = rcmCount;
+
+      populateRecoPeriods(records);
 
       document.getElementById('gstr2b-summary-cards').classList.remove('hidden');
       document.getElementById('gstr2b-table-card').classList.remove('hidden');
 
-      renderRecoTable('ALL');
+      renderRecoTable();
     }
 
     async function handleGSTR2BUpload(event) {
       const files = event.target.files;
       if (!files || files.length === 0) return;
+
+      const file = files[0];
+      if (file.name.toLowerCase().endsWith('.rex')) {
+        await importRexFile(file);
+        return;
+      }
 
       const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
@@ -1253,6 +1371,38 @@
       }
     }
 
+    async function importRexFile(file) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const payload = JSON.parse(e.target.result);
+          const res = await fetch('/api/session/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (data.success) {
+            closeUploadModal();
+            await fetchAppInfo();
+            await fetchSummary();
+            await loadDaybook();
+            if (data.reco_results) {
+              appState.recoResults = data.reco_results;
+              displayRecoSummary(data.reco_results);
+            }
+            switchTab('gstr2b');
+            alert('Session progress (.rex) imported successfully! Notes & Rectified status restored.');
+          } else {
+            alert('Error loading .rex session: ' + (data.error || 'Invalid format'));
+          }
+        } catch (err) {
+          alert('Failed to parse .rex file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
     async function clearGSTR2BFiles() {
       if (!confirm('Are you sure you want to clear all stored GSTR-2B files?')) return;
       try {
@@ -1268,7 +1418,6 @@
     }
 
     async function runSampleGSTR2BReco() {
-      // Demo GSTR-2B data matching actual purchase vouchers in AivarFY26.zip
       const sample_2b = {
         "b2b": [
           {
@@ -1305,23 +1454,121 @@
         });
         const reco = await res.json();
         appState.recoResults = reco;
-
-        document.getElementById('reco-stat-matched').innerText = reco.summary.matched_count;
-        document.getElementById('reco-stat-mismatched').innerText = reco.summary.mismatched_count;
-        document.getElementById('reco-stat-missing-tally').innerText = reco.summary.missing_tally_count;
-        document.getElementById('reco-stat-missing-2b').innerText = reco.summary.missing_2b_count;
-
-        document.getElementById('gstr2b-summary-cards').classList.remove('hidden');
-        document.getElementById('gstr2b-table-card').classList.remove('hidden');
-
-        renderRecoTable('ALL');
+        displayRecoSummary(reco);
       } catch (err) {
         alert('Reconciliation failed: ' + err.message);
       }
     }
 
     let currentRecoFilter = 'ALL';
+    let currentRecoPeriod = 'ALL';
     let recoSearchQuery = '';
+    let recoSortCol = null;
+    let recoSortDir = 'ASC';
+
+    function handleRecoSort(colKey) {
+      if (recoSortCol === colKey) {
+        recoSortDir = recoSortDir === 'ASC' ? 'DESC' : 'ASC';
+      } else {
+        recoSortCol = colKey;
+        recoSortDir = 'ASC';
+      }
+      renderRecoTable();
+    }
+
+    function updateSortIcons() {
+      const keys = ['status', 'gstin', 'supplier', 'inv_no_2b', 'inv_no_tally', 'date_2b', 'date_tally', 'period_2b', 'tax_2b', 'tax_tally', 'tax_diff', 'val_2b', 'val_tally', 'rcm', 'remarks'];
+      keys.forEach(k => {
+        const elem = document.getElementById(`sort-icon-${k}`);
+        if (elem) {
+          if (recoSortCol === k) {
+            elem.innerText = recoSortDir === 'ASC' ? ' ▲' : ' ▼';
+            elem.className = 'text-sky-400 font-bold ml-0.5';
+          } else {
+            elem.innerText = ' ↕';
+            elem.className = 'text-slate-600 opacity-40 font-normal ml-0.5';
+          }
+        }
+      });
+    }
+
+    function parseToYMD(dStr) {
+      if (!dStr || dStr === '-' || dStr === 'None') return null;
+      dStr = String(dStr).trim();
+
+      if (/^\d{8}$/.test(dStr)) {
+        return `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`;
+      }
+
+      let match = dStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (match) {
+        let d = match[1].padStart(2, '0');
+        let m = match[2].padStart(2, '0');
+        let y = match[3];
+        return `${y}-${m}-${d}`;
+      }
+
+      match = dStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (match) {
+        let y = match[1];
+        let m = match[2].padStart(2, '0');
+        let d = match[3].padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      const monthMap = {'jan':'01','feb':'02','mar':'03','apr':'04','may':'05','jun':'06','jul':'07','aug':'08','sep':'09','oct':'10','nov':'11','dec':'12'};
+      match = dStr.match(/^(\d{1,2})[\/\-\s]+([A-Za-z]{3})[\/\-\s]+(\d{4})$/);
+      if (match) {
+        let d = match[1].padStart(2, '0');
+        let mStr = match[2].toLowerCase();
+        let m = monthMap[mStr];
+        let y = match[3];
+        if (m) return `${y}-${m}-${d}`;
+      }
+
+      return null;
+    }
+
+    function getRecordPeriod2B(r) {
+      if (r.period_2b && r.period_2b !== '-' && r.period_2b !== 'None') {
+        return r.period_2b;
+      }
+      const ymd = parseToYMD(r.date_2b) || parseToYMD(r.date_tally);
+      if (ymd) {
+        const parts = ymd.split('-');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const mIdx = parseInt(parts[1], 10) - 1;
+        if (mIdx >= 0 && mIdx < 12) {
+          return `${months[mIdx]}-${parts[0]}`;
+        }
+      }
+      return '-';
+    }
+
+    function populateRecoPeriods(records) {
+      const periodsSet = new Set();
+      (records || []).forEach(r => {
+        const p = getRecordPeriod2B(r);
+        if (p && p !== '-') {
+          periodsSet.add(p);
+        }
+      });
+      const periods = Array.from(periodsSet).sort();
+      const select = document.getElementById('reco-period-select');
+      if (select) {
+        let html = '<option value="ALL">All Periods</option>';
+        periods.forEach(p => {
+          html += `<option value="${p}">${p}</option>`;
+        });
+        select.innerHTML = html;
+        select.value = currentRecoPeriod;
+      }
+    }
+
+    function handleRecoPeriodChange(val) {
+      currentRecoPeriod = val;
+      renderRecoTable();
+    }
 
     function filterRecoTable(statusFilter) {
       currentRecoFilter = statusFilter;
@@ -1331,15 +1578,17 @@
         'SHIFTED_BILL': 'reco-filter-shifted',
         'MISMATCHED_AMOUNT': 'reco-filter-mismatched',
         'MISSING_IN_TALLY': 'reco-filter-missing-tally',
-        'MISSING_IN_2B': 'reco-filter-missing-2b'
+        'MISSING_IN_2B': 'reco-filter-missing-2b',
+        'RCM': 'reco-filter-rcm',
+        'RECTIFIED': 'reco-filter-rectified'
       };
       Object.keys(ids).forEach(k => {
         const btn = document.getElementById(ids[k]);
         if (btn) {
           if (k === statusFilter) {
-            btn.className = 'px-3 py-1 bg-sky-600 text-white text-xs font-semibold rounded-lg shadow-sm';
+            btn.className = 'px-3 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5';
           } else {
-            btn.className = 'px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700';
+            btn.className = 'px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1.5';
           }
         }
       });
@@ -1351,13 +1600,80 @@
       renderRecoTable();
     }
 
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function updateRecordNote(recordId, noteText) {
+      if (!appState.recoResults || !appState.recoResults.records) return;
+      const rec = appState.recoResults.records.find(r => r.id === recordId);
+      if (rec) {
+        rec.note = noteText;
+        try {
+          await fetch('/api/gstr2b/update-record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: recordId, note: noteText })
+          });
+        } catch (err) {
+          console.error('Failed to update note:', err);
+        }
+      }
+    }
+
+    async function toggleRectified(recordId) {
+      if (!appState.recoResults || !appState.recoResults.records) return;
+      const rec = appState.recoResults.records.find(r => r.id === recordId);
+      if (rec) {
+        rec.isRectified = !rec.isRectified;
+        try {
+          const res = await fetch('/api/gstr2b/update-record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: recordId, isRectified: rec.isRectified })
+          });
+          const data = await res.json();
+          if (data.summary) {
+            appState.recoResults.summary = data.summary;
+          }
+        } catch (err) {
+          console.error('Failed to toggle rectified state:', err);
+        }
+        displayRecoSummary(appState.recoResults);
+      }
+    }
+
     function renderRecoTable() {
       if (!appState.recoResults) return;
       const records = appState.recoResults.records;
       const tbody = document.getElementById('reco-tbody');
 
-      let filtered = currentRecoFilter === 'ALL' ? records : records.filter(r => r.status === currentRecoFilter);
+      let filtered = records;
 
+      // 1. Period Filter (Primary Reference: GSTR-2B Date / period_2b)
+      if (currentRecoPeriod !== 'ALL') {
+        filtered = filtered.filter(r => getRecordPeriod2B(r) === currentRecoPeriod);
+      }
+
+      // 2. Status Tab Filter (Chained properly on filtered array)
+      if (currentRecoFilter === 'RECTIFIED') {
+        filtered = filtered.filter(r => r.isRectified);
+      } else if (currentRecoFilter === 'RCM') {
+        filtered = filtered.filter(r => r.rcm === 'Y' || r.is_rcm);
+      } else if (currentRecoFilter === 'MATCHED') {
+        filtered = filtered.filter(r => (r.status === 'MATCHED' || r.status === 'SHIFTED_BILL') && !r.isRectified);
+      } else if (currentRecoFilter === 'SHIFTED_BILL') {
+        filtered = filtered.filter(r => r.status === 'SHIFTED_BILL' && !r.isRectified);
+      } else if (currentRecoFilter === 'MISMATCHED_AMOUNT') {
+        filtered = filtered.filter(r => r.status === 'MISMATCHED_AMOUNT' && !r.isRectified);
+      } else if (currentRecoFilter === 'MISSING_IN_TALLY') {
+        filtered = filtered.filter(r => r.status === 'MISSING_IN_TALLY' && !r.isRectified);
+      } else if (currentRecoFilter === 'MISSING_IN_2B') {
+        filtered = filtered.filter(r => r.status === 'MISSING_IN_2B' && !r.isRectified);
+      }
+
+      // 3. Search Query Filter
       if (recoSearchQuery) {
         filtered = filtered.filter(r => {
           const dateTallyFmt = formatDate(r.date_tally);
@@ -1367,19 +1683,81 @@
             r.date_2b, dateTallyFmt, r.date_tally,
             r.period_2b, r.filing_date_2b,
             r.tax_2b, r.tax_tally, r.val_2b, r.val_tally,
-            r.remarks
+            r.remarks, r.note || '', (r.rcm === 'Y' || r.is_rcm) ? 'rcm' : ''
           ].join(' ').toLowerCase();
           return haystack.includes(recoSearchQuery);
         });
       }
 
-      tbody.innerHTML = filtered.map(r => {
+      // 4. Header Column Sorting (State Preserved via Unique Record IDs)
+      if (recoSortCol) {
+        const mult = recoSortDir === 'ASC' ? 1 : -1;
+        filtered.sort((a, b) => {
+          let valA = a[recoSortCol];
+          let valB = b[recoSortCol];
+
+          if (recoSortCol === 'tax_diff') {
+            valA = (a.tax_2b || 0) - (a.tax_tally || 0);
+            valB = (b.tax_2b || 0) - (b.tax_tally || 0);
+          } else if (recoSortCol === 'date_2b' || recoSortCol === 'date_tally') {
+            valA = parseToYMD(valA) || '0000-00-00';
+            valB = parseToYMD(valB) || '0000-00-00';
+          }
+
+          if (typeof valA === 'number' && typeof valB === 'number') {
+            return (valA - valB) * mult;
+          }
+
+          valA = (valA || '').toString().toLowerCase();
+          valB = (valB || '').toString().toLowerCase();
+          return valA.localeCompare(valB) * mult;
+        });
+      }
+
+      updateSortIcons();
+
+      // Update Dynamic Footer Counts & Totals
+      let sumTax2B = 0, sumTaxTally = 0;
+      filtered.forEach(r => {
+        sumTax2B += (r.tax_2b || 0);
+        sumTaxTally += (r.tax_tally || 0);
+      });
+
+      const taxDiff = sumTax2B - sumTaxTally;
+      let diffHtml = '';
+      if (Math.abs(taxDiff) > 0.01) {
+        const sign = taxDiff > 0 ? '+' : '-';
+        diffHtml = ` | <span class="text-rose-400 font-bold bg-rose-950/80 px-2 py-0.5 rounded border border-rose-500/40 font-mono">Tax Diff: ${sign}₹${formatMoney(Math.abs(taxDiff))} ⚠️</span>`;
+      } else {
+        diffHtml = ` | <span class="text-emerald-400 font-semibold font-mono">Tax Diff: ₹0.00 ✓</span>`;
+      }
+
+      const countElem = document.getElementById('reco-showing-count');
+      if (countElem) countElem.innerText = `Showing ${filtered.length} of ${records.length} records`;
+
+      const detailElem = document.getElementById('reco-showing-detail');
+      if (detailElem) {
+        detailElem.innerHTML = `(Tax 2B: <span class="text-emerald-400 font-mono font-semibold">₹${formatMoney(sumTax2B)}</span> | Tax Tally: <span class="text-sky-400 font-mono font-semibold">₹${formatMoney(sumTaxTally)}</span>${diffHtml})`;
+      }
+
+      const badgeElem = document.getElementById('reco-filtered-count-badge');
+      if (badgeElem) badgeElem.innerText = `${filtered.length} Records Found`;
+
+      tbody.innerHTML = filtered.map((r, index) => {
         let badge = '';
-        if (r.status === 'MATCHED') badge = `<span class="bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] font-bold">MATCHED</span>`;
-        else if (r.status === 'SHIFTED_BILL') badge = `<span class="bg-amber-950 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] font-bold">SHIFTED BILL</span>`;
-        else if (r.status === 'MISMATCHED_AMOUNT') badge = `<span class="bg-rose-950 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded text-[10px] font-bold">TAX MISMATCH</span>`;
-        else if (r.status === 'MISSING_IN_TALLY') badge = `<span class="bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded text-[10px] font-bold">MISSING TALLY</span>`;
-        else if (r.status === 'MISSING_IN_2B') badge = `<span class="bg-slate-800 text-slate-300 border border-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">MISSING 2B</span>`;
+        if (r.isRectified) {
+          badge = `<span class="bg-teal-950 text-teal-300 border border-teal-500/40 px-2 py-0.5 rounded text-[10px] font-bold">RECTIFIED</span>`;
+        } else if (r.status === 'MATCHED') {
+          badge = `<span class="bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] font-bold">MATCHED</span>`;
+        } else if (r.status === 'SHIFTED_BILL') {
+          badge = `<span class="bg-amber-950 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] font-bold">SHIFTED BILL</span>`;
+        } else if (r.status === 'MISMATCHED_AMOUNT') {
+          badge = `<span class="bg-rose-950 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded text-[10px] font-bold">TAX MISMATCH</span>`;
+        } else if (r.status === 'MISSING_IN_TALLY') {
+          badge = `<span class="bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded text-[10px] font-bold">MISSING TALLY</span>`;
+        } else if (r.status === 'MISSING_IN_2B') {
+          badge = `<span class="bg-slate-800 text-slate-300 border border-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">MISSING 2B</span>`;
+        }
 
         const taxDiff = (r.tax_2b || 0) - (r.tax_tally || 0);
         let diffColor = 'text-slate-400';
@@ -1397,33 +1775,55 @@
         const isInvMismatch = r.inv_no_2b !== '-' && r.inv_no_tally !== '-' && r.inv_no_2b !== r.inv_no_tally;
         const date2b = r.date_2b || '-';
         const dateTallyFmt = formatDate(r.date_tally);
-        const isDateDiff = date2b !== '-' && dateTallyFmt !== '-' && date2b !== dateTallyFmt;
+
+        const ymd2b = parseToYMD(date2b);
+        const ymdTally = parseToYMD(r.date_tally);
+        const isDateDiff = (ymd2b && ymdTally) ? (ymd2b !== ymdTally) : false;
 
         let tallyVchCell = '-';
         if (r.inv_no_tally && r.inv_no_tally !== '-') {
           const vtype = r.vtype_tally && r.vtype_tally !== '-' ? r.vtype_tally : 'Voucher';
-          const vtBadge = `<span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-800 border border-slate-700 text-sky-300 mr-1.5">${vtype}</span>`;
-          const vLink = r.tally_voucher_id ? `<span onclick="viewVoucher('${r.tally_voucher_id}')" class="cursor-pointer hover:underline hover:text-sky-300 font-semibold" title="Click to view/edit Tally voucher">${r.inv_no_tally}</span>` : `<span>${r.inv_no_tally}</span>`;
+          const vtBadge = `<span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-800 border border-slate-700 text-emerald-300 mr-1.5">${vtype}</span>`;
+          const vLink = r.tally_voucher_id ? `<span onclick="openVoucherModal(${r.tally_voucher_id})" class="cursor-pointer hover:underline hover:text-emerald-300 font-semibold text-slate-200" title="Click to view/edit Tally voucher">${r.inv_no_tally}</span>` : `<span>${r.inv_no_tally}</span>`;
           tallyVchCell = `${vtBadge}${vLink}`;
         }
 
-        return `<tr class="hover:bg-slate-700/30">
+        const actionBtn = r.isRectified 
+          ? `<button onclick="toggleRectified('${r.id}')" title="Click to unmark" class="px-2.5 py-1 bg-teal-950 hover:bg-slate-800 text-teal-300 border border-teal-600/50 rounded text-[11px] font-semibold transition-colors whitespace-nowrap">✓ Rectified</button>`
+          : `<button onclick="toggleRectified('${r.id}')" title="Mark item as Rectified/Fixed" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-semibold transition-colors whitespace-nowrap">Mark Rectified</button>`;
+
+        const noteInput = `<input type="text" value="${escapeHtml(r.note || '')}" placeholder="Add note..." onchange="updateRecordNote('${r.id}', this.value)" class="w-40 bg-slate-950/80 border border-slate-700/80 text-xs text-slate-200 rounded px-2.5 py-1 focus:outline-none focus:border-emerald-500 transition-colors">`;
+
+        const rcmBadge = (r.rcm === 'Y' || r.is_rcm)
+          ? `<span class="bg-amber-950 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] font-bold inline-block">RCM (Yes)</span>`
+          : `<span class="text-slate-500">No</span>`;
+
+        // MS Excel-style subtle alternating gradient rows (Dynamic index guarantees no color break on filtering)
+        const rowGradient = (index % 2 === 0)
+          ? 'bg-gradient-to-r from-slate-900/90 via-slate-800/40 to-slate-900/90'
+          : 'bg-gradient-to-r from-slate-800/70 via-slate-800/30 to-slate-800/70';
+
+        return `<tr class="${rowGradient} hover:from-slate-700/60 hover:to-slate-700/60 transition-all duration-150 border-b border-slate-800/40">
           <td class="px-4 py-2.5 whitespace-nowrap">${badge}</td>
-          <td class="px-4 py-2.5 font-mono text-sky-300 whitespace-nowrap">${r.gstin || '-'}</td>
+          <td class="px-4 py-2.5 font-mono text-emerald-300 whitespace-nowrap">${r.gstin || '-'}</td>
           <td class="px-4 py-2.5 font-semibold text-white truncate max-w-[180px]">${r.supplier || '-'}</td>
           <td class="px-4 py-2.5 font-mono text-slate-200 whitespace-nowrap">${r.inv_no_2b || '-'}</td>
           <td class="px-4 py-2.5 font-mono ${isInvMismatch ? 'text-amber-400 font-bold' : 'text-slate-300'} whitespace-nowrap">${tallyVchCell}</td>
           <td class="px-4 py-2.5 font-mono text-slate-300 whitespace-nowrap">${date2b}</td>
           <td class="px-4 py-2.5 font-mono ${isDateDiff ? 'text-amber-400 font-bold' : 'text-slate-400'} whitespace-nowrap" title="${isDateDiff ? 'Date contradiction between GSTR-2B and Tally' : ''}">${dateTallyFmt} ${isDateDiff ? '⚠️' : ''}</td>
           <td class="px-4 py-2.5 font-mono text-indigo-300 whitespace-nowrap font-medium">${r.period_2b || '-'}</td>
-          <td class="px-4 py-2.5 text-right font-mono text-emerald-400">${formatMoney(r.tax_2b)}</td>
-          <td class="px-4 py-2.5 text-right font-mono text-sky-400">${formatMoney(r.tax_tally)}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-emerald-400 font-medium">${formatMoney(r.tax_2b)}</td>
+          <td class="px-4 py-2.5 text-right font-mono text-teal-300 font-medium">${formatMoney(r.tax_tally)}</td>
           <td class="px-4 py-2.5 text-right font-mono ${diffColor}">${diffFormatted}</td>
           <td class="px-4 py-2.5 text-right font-mono text-slate-300">${formatMoney(r.val_2b)}</td>
           <td class="px-4 py-2.5 text-right font-mono text-slate-300">${formatMoney(r.val_tally)}</td>
+          <td class="px-4 py-2.5 text-center whitespace-nowrap">${rcmBadge}</td>
+          <td class="px-4 py-2.5 whitespace-nowrap">${noteInput}</td>
+          <td class="px-4 py-2.5 text-center whitespace-nowrap">${actionBtn}</td>
           <td class="px-4 py-2.5 text-xs ${isInvMismatch || isDateDiff ? 'text-amber-300 font-medium' : 'text-slate-400'} whitespace-nowrap">${r.remarks || (isDateDiff ? 'Date Mismatch' : '-')}</td>
         </tr>`;
       }).join('');
+      lucide.createIcons();
     }
 
     // Trial Balance & P&L Logic
@@ -1619,6 +2019,10 @@
       window.location.href = url;
     }
 
+    function exportRexSession() {
+      window.location.href = '/api/session/export';
+    }
+
     function exportTallyXML() {
       window.location.href = '/api/export/tally-xml';
     }
@@ -1629,6 +2033,11 @@
     async function handleFileSelected(event) {
       const file = event.target.files[0];
       if (!file) return;
+
+      if (file.name.toLowerCase().endsWith('.rex')) {
+        await importRexFile(file);
+        return;
+      }
 
       document.getElementById('upload-progress').classList.remove('hidden');
       const formData = new FormData();

@@ -15,6 +15,21 @@ def normalize_inv(inv_str):
         return ""
     return re.sub(r'[^A-Za-z0-9]', '', str(inv_str)).upper()
 
+def is_tax_ledger(lname):
+    lname_l = lname.lower().strip()
+    # Exclude base purchase, sales, expense, income, account, round off ledgers
+    if any(k in lname_l for k in ['purchase', 'sales', 'expense', 'income', 'a/c', 'account', 'round']):
+        return False, None
+    if 'igst' in lname_l:
+        return True, 'igst'
+    if 'cgst' in lname_l:
+        return True, 'cgst'
+    if 'sgst' in lname_l or 'utgst' in lname_l:
+        return True, 'sgst'
+    if 'gst' in lname_l or 'tax' in lname_l or 'duty' in lname_l or 'duties' in lname_l:
+        return True, 'tax'
+    return False, None
+
 def parse_gstr2b_xlsx_bytes(file_bytes, filename=""):
     invoices = []
     file_period = ""
@@ -66,6 +81,7 @@ def parse_gstr2b_xlsx_bytes(file_bytes, filename=""):
                                     inum = r_vals[2].strip()
                                     idate = r_vals[5].strip() if len(r_vals) > 5 else ''
                                     val = float(r_vals[6]) if len(r_vals) > 6 and r_vals[6] else 0.0
+                                    rcm_raw = r_vals[8].strip() if len(r_vals) > 8 else ''
                                     txval = float(r_vals[9]) if len(r_vals) > 9 and r_vals[9] else 0.0
                                     igst = float(r_vals[10]) if len(r_vals) > 10 and r_vals[10] else 0.0
                                     cgst = float(r_vals[11]) if len(r_vals) > 11 and r_vals[11] else 0.0
@@ -76,6 +92,7 @@ def parse_gstr2b_xlsx_bytes(file_bytes, filename=""):
                                     inum = r_vals[2].strip()
                                     idate = r_vals[4].strip() if len(r_vals) > 4 else ''
                                     val = float(r_vals[5]) if len(r_vals) > 5 and r_vals[5] else 0.0
+                                    rcm_raw = r_vals[7].strip() if len(r_vals) > 7 else ''
                                     txval = float(r_vals[8]) if len(r_vals) > 8 and r_vals[8] else 0.0
                                     igst = float(r_vals[9]) if len(r_vals) > 9 and r_vals[9] else 0.0
                                     cgst = float(r_vals[10]) if len(r_vals) > 10 and r_vals[10] else 0.0
@@ -84,6 +101,7 @@ def parse_gstr2b_xlsx_bytes(file_bytes, filename=""):
                                     filing_date = r_vals[14].strip() if len(r_vals) > 14 else ''
 
                                 period = file_period or gstr1_period or '-'
+                                is_rcm = 'Y' if rcm_raw.lower() in ['y', 'yes'] else 'N'
 
                                 invoices.append({
                                     'ctin': r_vals[0].strip(),
@@ -99,7 +117,8 @@ def parse_gstr2b_xlsx_bytes(file_bytes, filename=""):
                                     'igst': igst,
                                     'cgst': cgst,
                                     'sgst': sgst,
-                                    'tax': igst + cgst + sgst
+                                    'tax': igst + cgst + sgst,
+                                    'rcm': is_rcm
                                 })
     except Exception as e:
         print(f"Error parsing XLSX bytes: {e}")
@@ -627,11 +646,7 @@ class TallyDatabase:
         
         # 1. Fetch Tally Purchase, Debit Note, Credit Note, and GST-related Journal Vouchers
         query = '''
-            SELECT v.id, v.date, v.vno, v.vtype, v.party, v.gstin,
-                   SUM(CASE WHEN LOWER(le.ledger) LIKE '%cgst%' THEN le.amount ELSE 0 END) as cgst,
-                   SUM(CASE WHEN LOWER(le.ledger) LIKE '%sgst%' OR LOWER(le.ledger) LIKE '%utgst%' THEN le.amount ELSE 0 END) as sgst,
-                   SUM(CASE WHEN LOWER(le.ledger) LIKE '%igst%' THEN le.amount ELSE 0 END) as igst,
-                   (SELECT SUM(amount) FROM ledger_entries WHERE voucher_id = v.id AND is_debit = 1) as total_val
+            SELECT DISTINCT v.id, v.date, v.vno, v.vtype, v.party, v.gstin
             FROM vouchers v
             JOIN ledger_entries le ON v.id = le.voucher_id
             WHERE (
@@ -646,14 +661,37 @@ class TallyDatabase:
                     )
                 ))
             ) AND v.is_cancelled = 0
-            GROUP BY v.id
         '''
         tally_vouchers = c.execute(query).fetchall()
         
         tally_map = {}
         for tv in tally_vouchers:
             v_id = tv["id"]
-            tally_map[v_id] = {
+            entries = c.execute("SELECT ledger, amount, is_debit FROM ledger_entries WHERE voucher_id = ?", (v_id,)).fetchall()
+            
+            cgst, sgst, igst, other_tax, total_val = 0.0, 0.0, 0.0, 0.0, 0.0
+            has_cgst, has_sgst = False, False
+            
+            for e in entries:
+                is_tax, t_type = is_tax_ledger(e["ledger"])
+                if is_tax:
+                    if t_type == 'igst':
+                        igst += e["amount"]
+                    elif t_type == 'cgst':
+                        cgst += e["amount"]
+                        has_cgst = True
+                    elif t_type == 'sgst':
+                        sgst += e["amount"]
+                        has_sgst = True
+                    elif t_type == 'tax':
+                        other_tax += e["amount"]
+                elif e["is_debit"] == 1:
+                    total_val += e["amount"]
+            
+            total_tax = round(cgst + sgst + igst + other_tax, 2)
+            is_asymmetric_gst = (has_cgst and not has_sgst) or (has_sgst and not has_cgst)
+            
+            tally_map[str(v_id)] = {
                 "id": str(v_id),
                 "date": tv["date"],
                 "vno": tv["vno"],
@@ -661,8 +699,11 @@ class TallyDatabase:
                 "norm_vno": normalize_inv(tv["vno"]),
                 "party": tv["party"],
                 "gstin": (tv["gstin"] or "").strip(),
-                "total_tax": tv["cgst"] + tv["sgst"] + tv["igst"],
-                "total_val": tv["total_val"] or 0.0,
+                "total_tax": total_tax,
+                "total_val": round(total_val, 2),
+                "has_cgst": has_cgst,
+                "has_sgst": has_sgst,
+                "is_asymmetric_gst": is_asymmetric_gst,
                 "matched": False
             }
 
@@ -756,6 +797,7 @@ class TallyDatabase:
                             "tax_tally": tv["total_tax"],
                             "val_2b": c_val,
                             "val_tally": tv["total_val"],
+                            "rcm": inv.get("rcm", "N"),
                             "tally_voucher_id": tv["id"]
                         }
                         break
@@ -792,6 +834,7 @@ class TallyDatabase:
                             "tax_tally": tv["total_tax"],
                             "val_2b": c_val,
                             "val_tally": tv["total_val"],
+                            "rcm": inv.get("rcm", "N"),
                             "tally_voucher_id": tv["id"]
                         }
                         break
@@ -828,6 +871,7 @@ class TallyDatabase:
                         "tax_tally": tv["total_tax"],
                         "val_2b": c_val,
                         "val_tally": tv["total_val"],
+                        "rcm": inv.get("rcm", "N"),
                         "tally_voucher_id": tv["id"]
                     }
                     break
@@ -854,7 +898,18 @@ class TallyDatabase:
                     "tax_tally": 0.0,
                     "val_2b": inv.get("val", 0.0),
                     "val_tally": 0.0,
+                    "rcm": inv.get("rcm", "N"),
                     "tally_voucher_id": None
+                }
+
+        # Build lookup for previous notes & isRectified flags if self.reco_results exists
+        prev_state = {}
+        if self.reco_results and "records" in self.reco_results:
+            for pr in self.reco_results["records"]:
+                key = (pr.get("gstin", ""), pr.get("inv_no_2b", ""), pr.get("inv_no_tally", ""))
+                prev_state[key] = {
+                    "note": pr.get("note", ""),
+                    "isRectified": pr.get("isRectified", False)
                 }
 
         reco_list = [reco_map[i] for i in sorted(reco_map.keys())]
@@ -880,8 +935,22 @@ class TallyDatabase:
                     "tax_tally": tv["total_tax"],
                     "val_2b": 0.0,
                     "val_tally": tv["total_val"],
+                    "rcm": "N",
                     "tally_voucher_id": tv["id"]
                 })
+
+        for idx, r in enumerate(reco_list):
+            r["id"] = f"rec_{idx}"
+            key = (r.get("gstin", ""), r.get("inv_no_2b", ""), r.get("inv_no_tally", ""))
+            if key in prev_state:
+                r["note"] = prev_state[key]["note"]
+                r["isRectified"] = prev_state[key]["isRectified"]
+            else:
+                r["note"] = r.get("note", "")
+                r["isRectified"] = r.get("isRectified", False)
+
+        rectified_cnt = sum(1 for r in reco_list if r.get("isRectified"))
+        rcm_cnt = sum(1 for r in reco_list if r.get("rcm") == "Y")
 
         summary = {
             "total_2b": len(gstr2b_invoices),
@@ -890,14 +959,116 @@ class TallyDatabase:
             "matched_amount": matched_amount,
             "mismatched_count": mismatched_count,
             "missing_tally_count": missing_tally_count,
-            "missing_2b_count": missing_2b_count
+            "missing_2b_count": missing_2b_count,
+            "rectified_count": rectified_cnt,
+            "rcm_count": rcm_cnt
         }
 
         self.reco_results = {
             "summary": summary,
             "records": reco_list
         }
+        self.recalculate_reco_summary()
         return self.reco_results
+
+    def update_reco_record(self, record_id, note=None, is_rectified=None):
+        if not self.reco_results or 'records' not in self.reco_results:
+            return False
+        for r in self.reco_results['records']:
+            if r.get('id') == record_id:
+                if note is not None:
+                    r['note'] = note
+                if is_rectified is not None:
+                    r['isRectified'] = bool(is_rectified)
+                self.recalculate_reco_summary()
+                return True
+        return False
+
+    def recalculate_reco_summary(self):
+        if not self.reco_results or 'records' not in self.reco_results:
+            return
+        records = self.reco_results['records']
+        rectified_cnt = sum(1 for r in records if r.get('isRectified'))
+        
+        mismatched_cnt = sum(1 for r in records if r.get('status') == 'MISMATCHED_AMOUNT' and not r.get('isRectified'))
+        missing_tally_cnt = sum(1 for r in records if r.get('status') == 'MISSING_IN_TALLY' and not r.get('isRectified'))
+        missing_2b_cnt = sum(1 for r in records if r.get('status') == 'MISSING_IN_2B' and not r.get('isRectified'))
+        matched_exact = sum(1 for r in records if r.get('status') == 'MATCHED' and not r.get('isRectified'))
+        matched_amount = sum(1 for r in records if r.get('status') == 'SHIFTED_BILL' and not r.get('isRectified'))
+        
+        self.reco_results['summary']['rectified_count'] = rectified_cnt
+        self.reco_results['summary']['mismatched_count'] = mismatched_cnt
+        self.reco_results['summary']['missing_tally_count'] = missing_tally_cnt
+        self.reco_results['summary']['missing_2b_count'] = missing_2b_cnt
+        self.reco_results['summary']['matched_count'] = matched_exact + matched_amount
+        self.reco_results['summary']['matched_exact'] = matched_exact
+        self.reco_results['summary']['matched_amount'] = matched_amount
+
+    def export_session(self):
+        c = self.db.cursor()
+        groups = [dict(r) for r in c.execute("SELECT name, parent FROM groups").fetchall()]
+        ledgers = [dict(r) for r in c.execute("SELECT name, parent, opening_balance FROM ledgers").fetchall()]
+        vouchers = [dict(r) for r in c.execute("SELECT id, date, vtype, vno, party, gstin, narration, guid, is_cancelled FROM vouchers").fetchall()]
+        entries = [dict(r) for r in c.execute("SELECT voucher_id, ledger, amount, is_debit FROM ledger_entries").fetchall()]
+        
+        return {
+            "version": "1.0",
+            "file_type": "rex_session",
+            "company_name": self.company_name,
+            "file_name": self.file_name,
+            "min_date": self.min_date,
+            "max_date": self.max_date,
+            "info": self.get_info(),
+            "tally_data": {
+                "groups": groups,
+                "ledgers": ledgers,
+                "vouchers": vouchers,
+                "ledger_entries": entries
+            },
+            "reco_results": self.reco_results
+        }
+
+    def import_session(self, session_data):
+        if not isinstance(session_data, dict):
+            raise ValueError("Invalid session payload")
+        
+        self._init_schema()
+        self.company_name = session_data.get("company_name") or session_data.get("info", {}).get("company_name", "Loaded Session")
+        self.file_name = session_data.get("file_name") or session_data.get("info", {}).get("file_name", "reconciliation_progress.rex")
+        self.min_date = session_data.get("min_date") or session_data.get("info", {}).get("min_date", "")
+        self.max_date = session_data.get("max_date") or session_data.get("info", {}).get("max_date", "")
+        
+        tally_data = session_data.get("tally_data", {})
+        c = self.db.cursor()
+        
+        for g in tally_data.get("groups", []):
+            c.execute("INSERT OR REPLACE INTO groups VALUES (?, ?)", (g["name"], g.get("parent", "")))
+            
+        for l in tally_data.get("ledgers", []):
+            c.execute("INSERT OR REPLACE INTO ledgers VALUES (?, ?, ?)", (l["name"], l.get("parent", ""), l.get("opening_balance", 0.0)))
+            
+        for v in tally_data.get("vouchers", []):
+            c.execute('''
+                INSERT OR REPLACE INTO vouchers (id, date, vtype, vno, party, gstin, narration, guid, is_cancelled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (v.get("id"), v.get("date", ""), v.get("vtype", ""), v.get("vno", ""), v.get("party", ""), v.get("gstin", ""), v.get("narration", ""), v.get("guid", ""), v.get("is_cancelled", 0)))
+            
+        for e in tally_data.get("ledger_entries", []):
+            c.execute("INSERT INTO ledger_entries VALUES (?, ?, ?, ?)", (e["voucher_id"], e["ledger"], e["amount"], e["is_debit"]))
+            
+        self.db.commit()
+        
+        row = c.execute("SELECT MIN(date), MAX(date) FROM vouchers WHERE date != ''").fetchone()
+        if row and row[0]:
+            self.min_date = row[0]
+            self.max_date = row[1]
+
+        reco = session_data.get("reco_results")
+        if reco and isinstance(reco, dict) and "records" in reco:
+            self.reco_results = reco
+            self.recalculate_reco_summary()
+            
+        return self.get_info()
 
     def export_tally_xml(self):
         c = self.db.cursor()
@@ -928,8 +1099,20 @@ class TallyDatabase:
 
         for v in c.execute("SELECT * FROM vouchers"):
             v_id = v["id"]
+            guid_val = (v["guid"] or "").strip()
+            
             tm = ET.SubElement(reqdata, 'TALLYMESSAGE', {'xmlns:UDF': 'TallyUDF'})
-            vch = ET.SubElement(tm, 'VOUCHER', {'VCHTYPE': v["vtype"], 'ACTION': 'Create'})
+            vch_attrs = {'VCHTYPE': v["vtype"]}
+            if guid_val:
+                vch_attrs['ACTION'] = 'Alter'
+                vch_attrs['REMOTEID'] = guid_val
+            else:
+                vch_attrs['ACTION'] = 'Create'
+                
+            vch = ET.SubElement(tm, 'VOUCHER', vch_attrs)
+            if guid_val:
+                ET.SubElement(vch, 'GUID').text = guid_val
+                
             ET.SubElement(vch, 'DATE').text = v["date"]
             ET.SubElement(vch, 'VOUCHERTYPENAME').text = v["vtype"]
             ET.SubElement(vch, 'VOUCHERNUMBER').text = v["vno"]
@@ -980,16 +1163,18 @@ class TallyDatabase:
                 output.write(f'"{l["name"].replace('"', '""')}","{l["parent"].replace('"', '""')}","{l["opening"]}","{l["debit"]}","{l["credit"]}","{l["closing"]}"\n')
 
         elif report_type == 'gstr2b' and self.reco_results:
-            output.write("Status,Supplier GSTIN,Supplier Name,Invoice No (2B),Voucher Type (Tally),Invoice No (Tally),Date (2B),Date (Tally),2B Return Period,GSTR-1 Filing Date,Tax Amount (2B),Tax Amount (Tally),Tax Diff (2B - Tally),Total Value (2B),Total Value (Tally),Audit Remarks\n")
+            output.write("Status,Is Rectified,Supplier GSTIN,Supplier Name,Invoice No (2B),Voucher Type (Tally),Invoice No (Tally),Date (2B),Date (Tally),2B Return Period,GSTR-1 Filing Date,Tax Amount (2B),Tax Amount (Tally),Tax Diff (2B - Tally),Total Value (2B),Total Value (Tally),Audit Remarks,Notes\n")
             for r in self.reco_results["records"]:
                 sup = (r["supplier"] or "").replace('"', '""')
                 rem = (r.get("remarks", "")).replace('"', '""')
+                note = (r.get("note", "")).replace('"', '""').replace('\n', ' ')
+                is_rect = "YES" if r.get("isRectified") else "NO"
                 tax_diff = (r["tax_2b"] or 0.0) - (r["tax_tally"] or 0.0)
                 dt_tally = r.get("date_tally", "-")
                 if dt_tally and dt_tally != "-" and len(dt_tally) == 8:
                     dt_tally = f"{dt_tally[6:8]}/{dt_tally[4:6]}/{dt_tally[0:4]}"
                 vt_tally = r.get("vtype_tally", "-")
-                output.write(f'"{r["status"]}","{r["gstin"]}","{sup}","{r["inv_no_2b"]}","{vt_tally}","{r["inv_no_tally"]}","{r["date_2b"]}","{dt_tally}","{r.get("period_2b", "-")}","{r.get("filing_date_2b", "-")}","{r["tax_2b"]}","{r["tax_tally"]}","{tax_diff:.2f}","{r["val_2b"]}","{r["val_tally"]}","{rem}"\n')
+                output.write(f'"{r["status"]}","{is_rect}","{r["gstin"]}","{sup}","{r["inv_no_2b"]}","{vt_tally}","{r["inv_no_tally"]}","{r["date_2b"]}","{dt_tally}","{r.get("period_2b", "-")}","{r.get("filing_date_2b", "-")}","{r["tax_2b"]}","{r["tax_tally"]}","{tax_diff:.2f}","{r["val_2b"]}","{r["val_tally"]}","{rem}","{note}"\n')
 
         return output.getvalue()
 
@@ -1021,11 +1206,14 @@ def parse_gstr2b_json_bytes(file_bytes, filename=""):
                         cgst += float(det.get('cgst', 0))
                         sgst += float(det.get('sgst', 0))
                         igst += float(det.get('igst', 0))
+                    rcm_raw = str(inv.get('rev', '') or inv.get('reverse_charge', '') or inv.get('rcm', '')).strip()
+                    is_rcm = 'Y' if rcm_raw.lower() in ['y', 'yes', 'true'] else 'N'
                     invoices.append({
                         "ctin": ctin, "cname": cname, "inum": inum,
                         "norm_inum": normalize_inv(inum), "dt": idt,
                         "val": val, "txval": txval, "cgst": cgst, "sgst": sgst, "igst": igst,
-                        "tax": cgst + sgst + igst, "period_2b": period_2b, "filing_date": "-"
+                        "tax": cgst + sgst + igst, "period_2b": period_2b, "filing_date": "-",
+                        "rcm": is_rcm
                     })
     except Exception as e:
         print("JSON decode error:", e)
@@ -1142,6 +1330,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                 auto_load_r2b_files()
             self.send_json(tally_db.reco_results or {"summary": {}, "records": []})
 
+        elif path == '/api/session/export':
+            session_data = tally_db.export_session()
+            body = json.dumps(session_data, indent=2).encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Disposition', 'attachment; filename="reconciliation_progress.rex"')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         elif path == '/api/export/tally-xml':
             xml_data = tally_db.export_tally_xml()
             # Add subtle branding comment in XML
@@ -1189,7 +1387,77 @@ class RequestHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get('Content-Length', 0))
         raw_body = self.rfile.read(length)
 
-        if parsed.path == '/api/upload':
+        if parsed.path == '/api/session/import':
+            try:
+                payload = json.loads(raw_body.decode('utf-8'))
+                info = tally_db.import_session(payload)
+                self.send_json({"success": True, "info": info, "reco_results": tally_db.reco_results})
+            except Exception as e:
+                self.send_json({"error": f"Failed to import session: {str(e)}"}, 400)
+
+        elif parsed.path == '/api/gstr2b/update-record':
+            try:
+                payload = json.loads(raw_body.decode('utf-8'))
+                updated = tally_db.update_reco_record(payload.get('id'), payload.get('note'), payload.get('isRectified'))
+                self.send_json({"success": updated, "summary": tally_db.reco_results['summary'] if tally_db.reco_results else {}})
+            except Exception as e:
+                self.send_json({"error": f"Failed to update record: {str(e)}"}, 400)
+
+        elif parsed.path == '/api/gstr2b/reconcile':
+            try:
+                content_type = self.headers.get('Content-Type', '')
+                all_invoices = []
+
+                if 'multipart/form-data' in content_type:
+                    boundary_match = re.search(r'boundary=([^\s;]+)', content_type)
+                    if boundary_match:
+                        boundary = boundary_match.group(1).encode('utf-8')
+                        if boundary.startswith(b'"') and boundary.endswith(b'"'):
+                            boundary = boundary[1:-1]
+                        parts = raw_body.split(b'--' + boundary)
+                        for part in parts:
+                            if b'filename=' in part:
+                                header_end = part.find(b'\r\n\r\n')
+                                if header_end != -1:
+                                    headers_text = part[:header_end].decode('utf-8', errors='ignore')
+                                    fn_match = re.search(r'filename="([^"]+)"', headers_text)
+                                    filename = fn_match.group(1) if fn_match else "file.xlsx"
+                                    file_bytes = part[header_end + 4:].rstrip(b'\r\n--')
+
+                                    if filename.lower().endswith('.zip'):
+                                        try:
+                                            with zipfile.ZipFile(io.BytesIO(file_bytes), 'r') as z:
+                                                for zname in z.namelist():
+                                                    if zname.lower().endswith('.xlsx'):
+                                                        invs = parse_gstr2b_xlsx_bytes(z.read(zname), filename=zname)
+                                                        all_invoices.extend(invs)
+                                                    elif zname.lower().endswith('.json'):
+                                                        invs = parse_gstr2b_json_bytes(z.read(zname), filename=zname)
+                                                        all_invoices.extend(invs)
+                                        except Exception as e:
+                                            print(f"Error reading zip part {filename}: {e}")
+                                    elif filename.lower().endswith('.xlsx'):
+                                        invs = parse_gstr2b_xlsx_bytes(file_bytes, filename=filename)
+                                        all_invoices.extend(invs)
+                                    elif filename.lower().endswith('.json'):
+                                        invs = parse_gstr2b_json_bytes(file_bytes, filename=filename)
+                                        all_invoices.extend(invs)
+                elif 'application/json' in content_type:
+                    invs = parse_gstr2b_json_bytes(raw_body, filename="raw_data.json")
+                    all_invoices.extend(invs)
+                else:
+                    filename = self.headers.get('X-File-Name', 'file.xlsx')
+                    if filename.lower().endswith('.xlsx'):
+                        all_invoices.extend(parse_gstr2b_xlsx_bytes(raw_body, filename=filename))
+                    elif filename.lower().endswith('.json'):
+                        all_invoices.extend(parse_gstr2b_json_bytes(raw_body, filename=filename))
+
+                reco = tally_db.reconcile_gstr2b(all_invoices)
+                self.send_json(reco)
+            except Exception as e:
+                self.send_json({"error": f"Failed to reconcile GSTR-2B files: {str(e)}"}, 400)
+
+        elif parsed.path == '/api/upload':
             content_type = self.headers.get('Content-Type', '')
             file_bytes = None
             filename = self.headers.get('X-File-Name', 'uploaded_file.zip')
@@ -1212,97 +1480,28 @@ class RequestHandler(BaseHTTPRequestHandler):
                 
             if file_bytes:
                 try:
-                    tally_db.parse_file(file_bytes, filename=filename)
-                    auto_load_r2b_files()
-                    self.send_json({"success": True, "info": tally_db.get_info()})
+                    is_rex = filename.lower().endswith('.rex')
+                    if not is_rex and file_bytes.strip().startswith(b'{'):
+                        try:
+                            parsed_json = json.loads(file_bytes.decode('utf-8', errors='ignore'))
+                            if isinstance(parsed_json, dict) and ('tally_data' in parsed_json or 'reco_results' in parsed_json or parsed_json.get('file_type') == 'rex_session'):
+                                is_rex = True
+                                file_bytes = parsed_json
+                        except Exception:
+                            pass
+                    
+                    if is_rex:
+                        session_json = file_bytes if isinstance(file_bytes, dict) else json.loads(file_bytes.decode('utf-8'))
+                        info = tally_db.import_session(session_json)
+                        self.send_json({"success": True, "info": info, "reco_results": tally_db.reco_results, "is_session": True})
+                    else:
+                        tally_db.parse_file(file_bytes, filename=filename)
+                        auto_load_r2b_files()
+                        self.send_json({"success": True, "info": tally_db.get_info()})
                 except Exception as e:
-                    self.send_json({"error": f"Failed to parse XML: {str(e)}"}, 400)
+                    self.send_json({"error": f"Failed to parse file: {str(e)}"}, 400)
             else:
                 self.send_json({"error": "No file content received"}, 400)
-
-        elif parsed.path == '/api/gstr2b/reconcile':
-            content_type = self.headers.get('Content-Type', '')
-            default_filename = self.headers.get('X-File-Name', 'gstr2b.xlsx')
-            
-            r2b_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'R2B')
-            os.makedirs(r2b_dir, exist_ok=True)
-            
-            file_entries = []
-            
-            if 'multipart/form-data' in content_type:
-                boundary = content_type.split('boundary=')[-1].encode('utf-8')
-                parts = raw_body.split(b'--' + boundary)
-                for part in parts:
-                    if b'filename=' in part:
-                        header_end = part.find(b'\r\n\r\n')
-                        if header_end != -1:
-                            headers_text = part[:header_end].decode('utf-8', errors='ignore')
-                            fn_match = re.search(r'filename="([^"]+)"', headers_text)
-                            fn = fn_match.group(1) if fn_match else default_filename
-                            fbytes = part[header_end + 4:].rstrip(b'\r\n--')
-                            if fbytes:
-                                file_entries.append((os.path.basename(fn), fbytes))
-            elif 'application/json' in content_type:
-                if raw_body:
-                    file_entries.append(("upload.json", raw_body))
-            else:
-                if raw_body:
-                    file_entries.append((os.path.basename(default_filename), raw_body))
-
-            for fname, fbytes in file_entries:
-                if fname.lower().endswith('.zip') or (fbytes.startswith(b'PK\x03\x04') and not fname.lower().endswith('.xlsx')):
-                    try:
-                        with zipfile.ZipFile(io.BytesIO(fbytes), 'r') as z:
-                            for zname in z.namelist():
-                                if zname.lower().endswith('.xlsx') or zname.lower().endswith('.json'):
-                                    zbytes = z.read(zname)
-                                    s_name = os.path.basename(zname)
-                                    if s_name:
-                                        with open(os.path.join(r2b_dir, s_name), 'wb') as out_f:
-                                            out_f.write(zbytes)
-                    except Exception as e:
-                        print("ZIP extraction error:", e)
-                elif fname.lower().endswith('.xlsx') or fname.lower().endswith('.json') or fbytes.startswith(b'PK'):
-                    with open(os.path.join(r2b_dir, fname), 'wb') as out_f:
-                        out_f.write(fbytes)
-
-            invoices = auto_load_r2b_files()
-            if invoices:
-                self.send_json(tally_db.reco_results or {})
-            else:
-                self.send_json({"error": "No valid GSTR-2B invoice records found in uploaded files"}, 400)
-
-        elif parsed.path == '/api/voucher/update':
-            try:
-                payload = json.loads(raw_body.decode('utf-8'))
-                updated = tally_db.update_voucher(
-                    v_id=payload['id'],
-                    date=payload['date'],
-                    vtype=payload['vtype'],
-                    vno=payload['vno'],
-                    party=payload['party'],
-                    narration=payload['narration'],
-                    entries=payload['entries']
-                )
-                self.send_json({"success": True, "voucher": updated})
-            except Exception as e:
-                self.send_json({"error": f"Failed to update voucher: {str(e)}"}, 400)
-
-        elif parsed.path == '/api/voucher/create':
-            try:
-                payload = json.loads(raw_body.decode('utf-8'))
-                created = tally_db.create_voucher(
-                    date=payload['date'],
-                    vtype=payload['vtype'],
-                    vno=payload['vno'],
-                    party=payload['party'],
-                    narration=payload['narration'],
-                    entries=payload['entries']
-                )
-                self.send_json({"success": True, "voucher": created})
-            except Exception as e:
-                self.send_json({"error": f"Failed to create voucher: {str(e)}"}, 400)
-
         else:
             self.send_json({"error": "Method not allowed"}, 405)
 
